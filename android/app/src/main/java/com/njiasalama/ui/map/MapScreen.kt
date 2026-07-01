@@ -91,6 +91,10 @@ fun MapScreen(
 
     // Check permission state on startup. LaunchedEffect(Unit) runs exactly once when this screen boots.
     LaunchedEffect(Unit) {
+        // Initialize the Google Maps SDK immediately. This loads internal maps resources
+        // and guarantees CameraUpdateFactory is ready, preventing NullPointerExceptions on startup.
+        com.google.android.gms.maps.MapsInitializer.initialize(context)
+
         val fineLocationPermission = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION
