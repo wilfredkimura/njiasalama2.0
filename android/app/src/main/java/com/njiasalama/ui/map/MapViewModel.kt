@@ -93,4 +93,31 @@ class MapViewModel(private val locationProvider: LocationProvider) : ViewModel()
             }
         }
     }
+
+    /**
+     * Adds a new DangerPin locally to the UI state.
+     * This allows immediate visualization of reported hazards on the map before backend persistence is fully wired.
+     */
+    fun addDangerPinLocally(
+        title: String,
+        description: String,
+        latitude: Double,
+        longitude: Double,
+        type: HazardType
+    ) {
+        val currentState = _uiState.value
+        if (currentState is MapUiState.Success) {
+            val newPin = DangerPin(
+                id = java.util.UUID.randomUUID().toString(), // Generates a unique system ID for tracking
+                title = title,
+                description = description,
+                latitude = latitude,
+                longitude = longitude,
+                type = type,
+                reportedBy = "CurrentUser" // Placeholder user ID until Google Login is integrated
+            )
+            // Emit the updated list to trigger screen refreshes instantly
+            _uiState.value = MapUiState.Success(currentState.pins + newPin)
+        }
+    }
 }

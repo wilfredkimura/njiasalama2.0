@@ -115,4 +115,40 @@ class MapViewModelTest {
         assertEquals(-1.2921, userLocation!!.latitude, 0.0)
         assertEquals(36.8219, userLocation.longitude, 0.0)
     }
+
+    /**
+     * Test case to verify that adding a hazard pin locally appends the new pin
+     * successfully to the ViewModel's Success UI state list and increments its size.
+     */
+    @Test
+    fun testAddDangerPinLocallyAppendsPinSuccessfully() {
+        // 1. Arrange: Create the ViewModel with our fake location provider.
+        val viewModel = MapViewModel(FakeLocationProvider())
+
+        // Retrieve initial Success state list (should have 2 mock pins)
+        val initialState = viewModel.uiState.value as MapUiState.Success
+        assertEquals(2, initialState.pins.size)
+
+        // 2. Act: Call addDangerPinLocally to append a third pin
+        viewModel.addDangerPinLocally(
+            title = "Dangerous Traffic",
+            description = "Construction zone blocks path",
+            latitude = -1.3000,
+            longitude = 36.8300,
+            type = HazardType.DANGEROUS_TRAFFIC
+        )
+
+        // 3. Assert: Verify the state has updated with 3 pins
+        val updatedState = viewModel.uiState.value as MapUiState.Success
+        assertEquals(3, updatedState.pins.size)
+
+        // Confirm the details of the newly appended pin
+        val newlyAddedPin = updatedState.pins.last()
+        assertEquals("Dangerous Traffic", newlyAddedPin.title)
+        assertEquals("Construction zone blocks path", newlyAddedPin.description)
+        assertEquals(-1.3000, newlyAddedPin.latitude, 0.0)
+        assertEquals(36.8300, newlyAddedPin.longitude, 0.0)
+        assertEquals(HazardType.DANGEROUS_TRAFFIC, newlyAddedPin.type)
+        assertEquals("CurrentUser", newlyAddedPin.reportedBy)
+    }
 }

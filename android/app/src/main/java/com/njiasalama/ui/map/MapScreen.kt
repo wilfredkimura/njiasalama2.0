@@ -187,5 +187,24 @@ fun MapScreen(
                 }
             }
         }
+
+        // Overlay dialog form when cyclist has long-pressed a coordinates point on the map.
+        // It provides input fields to submit hazard details and updates the local UI list immediately.
+        selectedLatLngForNewPin?.let { latLng ->
+            AddPinDialog(
+                latLng = latLng,
+                onDismiss = { selectedLatLngForNewPin = null },
+                onSubmit = { title, description, type ->
+                    viewModel.addDangerPinLocally(
+                        title = title,
+                        description = description,
+                        latitude = latLng.latitude,
+                        longitude = latLng.longitude,
+                        type = type
+                    )
+                    selectedLatLngForNewPin = null
+                }
+            )
+        }
     }
 }
