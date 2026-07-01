@@ -1,0 +1,14 @@
+# Node dependencies
+**/node_modules/
+**/dist/
+**/npm-debug.log*
+
+# Android build outputs and local setups
+**/build/
+**/.gradle/
+**/local.properties
+**/.idea/
+*.iml
+
+# Environments
+**.env
