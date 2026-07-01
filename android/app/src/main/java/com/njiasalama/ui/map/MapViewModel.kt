@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel // Importing the ViewModel class from the An
 import androidx.lifecycle.viewModelScope // Importing the viewModelScope property to launch coroutines that are tied to the ViewModel's lifecycle.
 import com.njiasalama.domain.model.DangerPin// Importing the DangerPin data class from the domain model package to represent road hazard pins on the map.
 import com.njiasalama.domain.model.HazardType// Importing the HazardType enum class from the domain model package to categorize road hazards.
-import kotlinx.flow.MutableStateFlow // Importing the MutableStateFlow class to create a mutable state flow for the Map screen.
-import kotlinx.flow.StateFlow // Importing the StateFlow class to create a state flow for the Map screen.
-import kotlinx.flow.asStateFlow // Importing the asStateFlow function to convert a mutable state flow to a read-only state flow.
+import kotlinx.coroutines.flow.MutableStateFlow // Importing the MutableStateFlow class from coroutines to create a read-write state flow.
+import kotlinx.coroutines.flow.StateFlow // Importing the StateFlow class to represent read-only streams.
+import kotlinx.coroutines.flow.asStateFlow // Importing the asStateFlow function to expose a read-only state flow.
 import kotlinx.coroutines.launch // Importing the launch function to launch coroutines.
 
 /**
