@@ -8,8 +8,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext // Importing LocalContext to retrieve active Android Context inside Compose.
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer // Importing initializer helper to define ViewModel factory builders.
+import androidx.lifecycle.viewmodel.viewModelFactory // Importing viewModelFactory to construct view model parameters.
+import com.njiasalama.data.LocationService // Importing the concrete LocationService to pass to the ViewModel.
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
@@ -25,8 +29,17 @@ import com.google.maps.android.compose.rememberCameraPositionState
 @Composable
 fun MapScreen(
     modifier: Modifier = Modifier,
-    // Automatically instantiates and registers the lifecycle-aware MapViewModel
-    viewModel: MapViewModel = viewModel()
+    // Retrieve the LocalContext of the screen layout
+    context: android.content.Context = LocalContext.current,
+    // Automatically instantiates the MapViewModel passing the custom factory
+    viewModel: MapViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                // Initialize MapViewModel with a concrete LocationService wrapper
+                MapViewModel(LocationService(context.applicationContext))
+            }
+        }
+    )
 ) {
     // collectAsStateWithLifecycle extracts data updates from the ViewModel's state flow (pipeline)
     // while checking the lifecycle of the phone screen. If the user minimizes the app,

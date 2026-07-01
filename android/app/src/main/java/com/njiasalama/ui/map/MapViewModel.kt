@@ -1,7 +1,9 @@
 package com.njiasalama.ui.map
 
-import androidx.lifecycle.ViewModel // Importing the ViewModel class from the AndroidX lifecycle library to create a ViewModel for the Map screen.
+import androidx.lifecycle.ViewModel // Importing the standard ViewModel class from lifecycle.
 import androidx.lifecycle.viewModelScope // Importing the viewModelScope property to launch coroutines that are tied to the ViewModel's lifecycle.
+import com.google.android.gms.maps.model.LatLng // Importing LatLng class to represent latitude/longitude points.
+import com.njiasalama.data.LocationProvider // Importing the LocationProvider interface instead of the concrete implementation.
 import com.njiasalama.domain.model.DangerPin// Importing the DangerPin data class from the domain model package to represent road hazard pins on the map.
 import com.njiasalama.domain.model.HazardType// Importing the HazardType enum class from the domain model package to categorize road hazards.
 import kotlinx.coroutines.flow.MutableStateFlow // Importing the MutableStateFlow class from coroutines to create a read-write state flow.
@@ -12,8 +14,15 @@ import kotlinx.coroutines.launch // Importing the launch function to launch coro
 /**
  * Architectural state management layer. It interacts with data sources
  * and exposes clean, lifecycle-aware data flows straight to the UI.
+ * We inject the LocationProvider interface to support clean unit testing.
  */
-class MapViewModel : ViewModel() { // Class declaration for the MapViewModel, which is a subclass of ViewModel.
+class MapViewModel(private val locationProvider: LocationProvider) : ViewModel() { // Class declaration for the MapViewModel, which is a subclass of ViewModel.
+
+    // Private read-write flow tracking the cyclist's current GPS location. Starts as null.
+    private val _userLocation = MutableStateFlow<LatLng?>(null)
+
+    // Public read-only flow that Compose observers can listen to for camera-centering
+    val userLocation: StateFlow<LatLng?> = _userLocation.asStateFlow()
 
     /**
      * An internal, read-write state container utilizing StateFlow.
@@ -69,6 +78,19 @@ class MapViewModel : ViewModel() { // Class declaration for the MapViewModel, wh
             // Updating the flow value. Triggering this shifts our UI layer state completely
             // from 'Loading' into 'Success', passing the mock array instantly.
             _uiState.value = MapUiState.Success(mockList)
+        }
+    }
+
+    /**
+     * Starts requesting continuous GPS location updates from the LocationProvider.
+     * The updates are collected asynchronously inside the viewModelScope and posted to _userLocation.
+     */
+    fun startLocationUpdates() {
+        viewModelScope.launch {
+            // Collect is a terminal flow operator that listens to all values emitted by the location flow
+            locationProvider.getLocationUpdates().collect { location ->
+                _userLocation.value = location
+            }
         }
     }
 }

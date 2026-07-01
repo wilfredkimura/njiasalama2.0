@@ -15,11 +15,19 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
 /**
- * A helper class that acts as a wrapper around Google Play Services' FusedLocationProviderClient.
- * This class is responsible for continuously fetching the device's physical GPS location
- * and converting those updates into a modern, reactive Kotlin Flow.
+ * An interface defining the contract for location providers.
+ * Using an interface allows us to easily swap the real GPS provider
+ * with a "Fake" one during unit testing, keeping our tests independent.
  */
-class LocationService(private val context: Context) {
+interface LocationProvider {
+    fun getLocationUpdates(intervalMillis: Long = 5000L): Flow<LatLng>
+}
+
+/**
+ * A helper class that acts as a wrapper around Google Play Services' FusedLocationProviderClient.
+ * This class implements the LocationProvider interface to stream real GPS coordinates.
+ */
+class LocationService(private val context: Context) : LocationProvider {
 
     // FusedLocationProviderClient is Google's API to fetch geographic location telemetry.
     // It automatically balances GPS, Wi-Fi, and cell signals to optimize battery and speed.
@@ -32,7 +40,7 @@ class LocationService(private val context: Context) {
      * Google Play Services into a reactive stream that other components can observe.
      */
     @SuppressLint("MissingPermission") // We assume permissions are verified before calling this
-    fun getLocationUpdates(intervalMillis: Long = 5000L): Flow<LatLng> = callbackFlow {
+    override fun getLocationUpdates(intervalMillis: Long): Flow<LatLng> = callbackFlow {
         
         // 1. Define the location request criteria.
         // Priority.PRIORITY_HIGH_ACCURACY ensures we get exact GPS coordinates (ideal for cyclists).
