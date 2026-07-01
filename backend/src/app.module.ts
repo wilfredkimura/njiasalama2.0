@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config'; // Importing Confi
 import { TypeOrmModule } from '@nestjs/typeorm'; // Importing TypeORM module to manage our PostgreSQL database connections.
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { PinsModule } from './pins/pins.module'; // Importing the PinsModule to expose its endpoints and services.
 
 /**
  * Configuration factory for TypeORM module options.
@@ -42,6 +43,7 @@ export function getTypeOrmModuleOptions(configService: ConfigService) {
       inject: [ConfigService], // Inject ConfigService to fetch DATABASE_URL
       useFactory: getTypeOrmModuleOptions, // Bind our testable options factory function
     }),
+    PinsModule, // Register our newly created PinsModule containing controller routes and services
   ],
   controllers: [AppController],
   providers: [AppService],
