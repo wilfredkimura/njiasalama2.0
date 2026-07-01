@@ -116,16 +116,20 @@ fun MapScreen(
         }
     }
 
-    // Automatically center and animate the camera on the user's location when first retrieved
-    LaunchedEffect(userLocation) {
-        userLocation?.let { location ->
-            if (!hasCenteredCamera) {
-                // animate updates the map viewpoint smoothly with a camera shift zoom (15f)
-                cameraPositionState.animate(
-                    update = CameraUpdateFactory.newLatLngZoom(location, 15f)
-                )
-                // Set flag to true so user manual pans are not overridden by subsequent updates
-                hasCenteredCamera = true
+    // Automatically center and animate the camera on the user's location when first retrieved.
+    // We include uiState as a trigger key to guarantee that if the location is retrieved while
+    // the map is still in its loading state, it will try to animate again once the map success loads.
+    LaunchedEffect(userLocation, uiState) {
+        if (uiState is MapUiState.Success) {
+            userLocation?.let { location ->
+                if (!hasCenteredCamera) {
+                    // animate updates the map viewpoint smoothly with a camera shift zoom (15f)
+                    cameraPositionState.animate(
+                        update = CameraUpdateFactory.newLatLngZoom(location, 15f)
+                    )
+                    // Set flag to true so user manual pans are not overridden by subsequent updates
+                    hasCenteredCamera = true
+                }
             }
         }
     }

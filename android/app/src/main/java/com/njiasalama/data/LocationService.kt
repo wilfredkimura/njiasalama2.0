@@ -42,14 +42,32 @@ class LocationService(private val context: Context) : LocationProvider {
     @SuppressLint("MissingPermission") // We assume permissions are verified before calling this
     override fun getLocationUpdates(intervalMillis: Long): Flow<LatLng> = callbackFlow {
         
-        // 1. Define the location request criteria.
-        // Priority.PRIORITY_HIGH_ACCURACY ensures we get exact GPS coordinates (ideal for cyclists).
-        // intervalMillis defines how often (e.g. every 5 seconds) we want to fetch location.
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMillis)
+        // 1. Fetch the cached last known location immediately to provide fast startup coordinates
+        locationClient.lastLocation.addOnSuccessListener { location ->
+            location?.let {
+                trySend(LatLng(it.latitude, it.longitude))
+            }
+        }
+
+        // 2. Check if the app is allowed to fetch high accuracy fine GPS coordinates.
+        // If not, we fall back to balanced accuracy to support coarse (approximate) location tracking.
+        val hasFinePermission = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.ACCESS_FINE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        val priority = if (hasFinePermission) {
+            Priority.PRIORITY_HIGH_ACCURACY
+        } else {
+            Priority.PRIORITY_BALANCED_POWER_ACCURACY
+        }
+
+        // 3. Define the location request criteria.
+        val locationRequest = LocationRequest.Builder(priority, intervalMillis)
             .setMinUpdateIntervalMillis(intervalMillis / 2) // Minimum delay between consecutive updates
             .build()
 
-        // 2. Define the callback that receives new locations from the Android system
+        // 4. Define the callback that receives new locations from the Android system
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 super.onLocationResult(locationResult)
@@ -62,16 +80,14 @@ class LocationService(private val context: Context) : LocationProvider {
             }
         }
 
-        // 3. Register the callback with the FusedLocationProviderClient.
-        // We run this on the Main Looper thread to ensure thread-safe UI updates.
+        // 5. Register the callback with the FusedLocationProviderClient.
         locationClient.requestLocationUpdates(
             locationRequest,
             locationCallback,
             Looper.getMainLooper()
         )
 
-        // 4. awaitClose is called when the flow's collector stops collecting (e.g. app minimized or closed).
-        // It is CRITICAL to unregister the listener here to prevent memory leaks and save battery!
+        // 6. awaitClose is called when the flow's collector stops collecting.
         awaitClose {
             locationClient.removeLocationUpdates(locationCallback)
         }
