@@ -66,6 +66,9 @@ fun MapScreen(
     // Track whether we have already centered the camera on the user's location initially
     var hasCenteredCamera by remember { mutableStateOf(false) }
 
+    // Temporary state to hold coordinates of a map long-press gesture before showing the add pin dialog
+    var selectedLatLngForNewPin by remember { mutableStateOf<LatLng?>(null) }
+
     // Sets up the map camera position centered over Nairobi coordinates by default
     val defaultLocation = LatLng(-1.2921, 36.8219)
     
@@ -167,7 +170,11 @@ fun MapScreen(
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
                     cameraPositionState = cameraPositionState,
-                    properties = mapProperties
+                    properties = mapProperties,
+                    // Intercept long press gestures on the map layout to capture coordinate positions
+                    onMapLongClick = { latLng ->
+                        selectedLatLngForNewPin = latLng
+                    }
                 ) {
                     // Loop through every DangerPin in the list and draw a marker on the map
                     state.pins.forEach { pin ->
