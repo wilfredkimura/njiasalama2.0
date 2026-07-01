@@ -19,6 +19,15 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Load local.properties to read the Maps API Key securely
+        val localProperties = java.util.Properties()
+        val localPropertiesFile = project.rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localProperties.load(localPropertiesFile.inputStream())
+        }
+        val mapsApiKey = localProperties.getProperty("MAPS_API_KEY") ?: ""
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {
