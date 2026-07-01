@@ -58,7 +58,7 @@ describe('PinsService', () => {
   });
 
   describe('findAllNearby', () => {
-    it('should compile the ST_DWithin spatial query and fetch matching pins', async () => {
+    it('should compile the Haversine formula spatial query and fetch matching pins', async () => {
       const result = await service.findAllNearby(-1.2921, 36.8219, 1000);
 
       // Verify that queryBuilder compiles the spatial queries correctly

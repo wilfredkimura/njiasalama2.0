@@ -35,8 +35,8 @@ export class PinsService {
 
   /**
    * Fetches all danger pins located within a specified radius (in meters) of a cyclist's current coordinates.
-   * This method uses PostGIS geography query functions (ST_DWithin) to run highly performant 
-   * distance calculations directly in the database.
+   * This method uses the standard Haversine formula written in raw SQL to calculate metric distance on the earth's surface.
+   * It works on all PostgreSQL/Neon configurations without requiring the PostGIS spatial extension.
    */
   async findAllNearby(
     latitude: number,
@@ -46,13 +46,13 @@ export class PinsService {
     return await this.pinsRepository
       .createQueryBuilder('pin')
       .where(
-        // PostGIS ST_DWithin function checks if the distance between two points is within the radius.
-        // We cast points to geography (::geography) so distance is calculated in meters, not flat grid degrees.
-        'ST_DWithin(' +
-          'ST_SetSRID(ST_MakePoint(pin.longitude, pin.latitude), 4326)::geography, ' +
-          'ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography, ' +
-          ':radiusMeters' +
-        ')',
+        // The Spherical Law of Cosines (Haversine formula variant) calculates geodesic distance in meters.
+        // Earth's radius is approximated as 6,371,000 meters.
+        'acos(' +
+          'sin(radians(pin.latitude)) * sin(radians(:latitude)) + ' +
+          'cos(radians(pin.latitude)) * cos(radians(:latitude)) * ' +
+          'cos(radians(:longitude) - radians(pin.longitude))' +
+        ') * 6371000 <= :radiusMeters',
         { latitude, longitude, radiusMeters },
       )
       .orderBy('pin.createdAt', 'DESC') // Order search results by latest first
