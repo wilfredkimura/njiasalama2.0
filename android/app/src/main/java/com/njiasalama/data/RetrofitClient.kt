@@ -11,8 +11,8 @@ import retrofit2.converter.gson.GsonConverterFactory
  */
 object RetrofitClient {
     
-    // '10.0.2.2' is the standard loopback IP address mapping the Android emulator to the host machine's localhost (Port 3000)
-    private const val BASE_URL = "http://10.0.2.2:3000/"
+    // '192.168.1.5' is the local Wi-Fi IP address of the host machine running the NestJS server.
+    private const val BASE_URL = "http://192.168.1.5:3000/"
 
     // Lazily builds the Retrofit API instance on first access
     val api: NjiaSalamaApi by lazy {
