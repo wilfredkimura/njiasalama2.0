@@ -1,5 +1,7 @@
 package com.njiasalama.data
 
+import com.njiasalama.data.websocket.SocketManager
+import com.njiasalama.data.websocket.SocketManagerImpl
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
@@ -24,5 +26,10 @@ object RetrofitClient {
     // Lazily builds the PinRepository implementation mapping our API client
     val pinRepository: PinRepositoryImpl by lazy {
         PinRepositoryImpl(api)
+    }
+
+    // Lazily builds the SocketManager client mapping our WebSockets server connection
+    val socketManager: SocketManager by lazy {
+        SocketManagerImpl(socketUrl = BASE_URL)
     }
 }
