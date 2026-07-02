@@ -15,7 +15,7 @@ import java.net.URISyntaxException
  * Uses callbackFlow to transform callback-based Socket.IO events into Coroutines Streams.
  */
 class SocketManagerImpl(
-    private val socketUrl: String = "http://192.168.1.5:3000",
+    private val socketUrl: String = com.njiasalama.BuildConfig.BACKEND_URL,
     private val gson: Gson = Gson()
 ) : SocketManager {
 

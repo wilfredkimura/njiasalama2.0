@@ -30,6 +30,9 @@ android {
         }
         val mapsApiKey = localProperties.getProperty("MAPS_API_KEY") ?: ""
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+
+        val backendUrl = localProperties.getProperty("BACKEND_URL") ?: "http://10.0.2.2:3000/"
+        buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
     }
 
     buildTypes {
@@ -47,6 +50,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

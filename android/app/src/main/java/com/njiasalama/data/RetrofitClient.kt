@@ -11,8 +11,8 @@ import retrofit2.converter.gson.GsonConverterFactory
  */
 object RetrofitClient {
     
-    // '192.168.1.5' is the local Wi-Fi IP address of the host machine running the NestJS server.
-    private const val BASE_URL = "http://192.168.1.5:3000/"
+    // Dynamically retrieve the backend server URL generated at build time from local.properties config
+    private val BASE_URL = com.njiasalama.BuildConfig.BACKEND_URL
 
     // Lazily builds the Retrofit API instance on first access
     val api: NjiaSalamaApi by lazy {
