@@ -65,6 +65,9 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
+    implementation(libs.socket.io.client) {
+        exclude(group = "org.json", module = "json")
+    }
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -11,6 +11,7 @@ composeBom = "2026.02.01"
 mapsCompose = "6.12.0"
 playServicesLocation = "21.3.0"
 retrofit = "2.11.0"
+socketIo = "2.1.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -34,6 +35,7 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
+socket-io-client = { group = "io.socket", name = "socket.io-client", version.ref = "socketIo" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
