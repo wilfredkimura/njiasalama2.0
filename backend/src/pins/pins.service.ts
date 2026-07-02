@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DangerPin } from './pins.entity';
 import { CreatePinDto } from './dto/create-pin.dto';
+import { PinsGateway } from './pins.gateway'; // Importing PinsGateway to trigger live broadcasts
 
 /**
  * Service layer coordinating database read/write queries for hazard danger pins.
@@ -14,14 +15,19 @@ export class PinsService {
     // Inject the default TypeORM repository for the DangerPin entity
     @InjectRepository(DangerPin)
     private readonly pinsRepository: Repository<DangerPin>,
+    // Inject the WebSocket gateway to publish live real-time updates
+    private readonly pinsGateway: PinsGateway,
   ) {}
 
   /**
-   * Saves a new cyclist-reported road hazard pin in the database.
+   * Saves a new cyclist-reported road hazard pin in the database and broadcasts it in real-time.
    */
   async create(createPinDto: CreatePinDto): Promise<DangerPin> {
     const pin = this.pinsRepository.create(createPinDto);
-    return await this.pinsRepository.save(pin);
+    const savedPin = await this.pinsRepository.save(pin);
+    // Broadcast the newly created danger pin to all connected WebSocket clients instantly
+    this.pinsGateway.broadcastNewPin(savedPin);
+    return savedPin;
   }
 
   /**
