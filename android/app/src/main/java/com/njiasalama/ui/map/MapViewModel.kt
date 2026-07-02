@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel // Importing the standard ViewModel class fr
 import androidx.lifecycle.viewModelScope // Importing the viewModelScope property to launch coroutines that are tied to the ViewModel's lifecycle.
 import com.google.android.gms.maps.model.LatLng // Importing LatLng class to represent latitude/longitude points.
 import com.njiasalama.data.LocationProvider // Importing the LocationProvider interface instead of the concrete implementation.
+import com.njiasalama.data.websocket.SocketManager // Importing SocketManager to listen to real-time WebSockets.
 import com.njiasalama.domain.model.DangerPin// Importing the DangerPin data class from the domain model package to represent road hazard pins on the map.
 import com.njiasalama.domain.model.HazardType// Importing the HazardType enum class from the domain model package to categorize road hazards.
 import com.njiasalama.domain.repository.PinRepository // Importing PinRepository to query database endpoints.
@@ -15,11 +16,12 @@ import kotlinx.coroutines.launch // Importing the launch function to launch coro
 /**
  * Architectural state management layer. It interacts with data sources
  * and exposes clean, lifecycle-aware data flows straight to the UI.
- * We inject the LocationProvider and PinRepository interfaces to support clean unit testing.
+ * We inject the LocationProvider, PinRepository, and SocketManager interfaces to support clean unit testing.
  */
 class MapViewModel(
     private val locationProvider: LocationProvider,
-    private val pinRepository: PinRepository
+    private val pinRepository: PinRepository,
+    private val socketManager: SocketManager
 ) : ViewModel() {
 
     // Private read-write flow tracking the cyclist's current GPS location. Starts as null.
@@ -44,6 +46,7 @@ class MapViewModel(
     // Constructor block executed automatically as soon as the ViewModel is initialized
     init {
         loadPins()
+        listenToWebSocketUpdates()
     }
 
     /**
@@ -62,6 +65,29 @@ class MapViewModel(
                         exception.message ?: "Failed to connect to the backend server"
                     )
                 }
+        }
+    }
+
+    /**
+     * Subscribes to the live Socket.io channel via SocketManager.
+     * Appends broadcasted hazard updates directly to the Success UI state map list.
+     */
+    private fun listenToWebSocketUpdates() {
+        viewModelScope.launch {
+            // Connect to server
+            socketManager.connect()
+            
+            // Collect live events emitted by SocketManager Flow
+            socketManager.getNewPinFlow().collect { newPin ->
+                val currentState = _uiState.value
+                if (currentState is MapUiState.Success) {
+                    // Prevent duplicate insertions if the pin was already created locally or retrieved via HTTP REST
+                    val pinAlreadyExists = currentState.pins.any { it.id == newPin.id }
+                    if (!pinAlreadyExists) {
+                        _uiState.value = MapUiState.Success(currentState.pins + newPin)
+                    }
+                }
+            }
         }
     }
 
@@ -120,5 +146,14 @@ class MapViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * Lifecycle method invoked automatically when the ViewModel is destroyed.
+     * We close our active WebSockets connection here to release memory and network connections.
+     */
+    override fun onCleared() {
+        super.onCleared()
+        socketManager.disconnect()
     }
 }

@@ -47,10 +47,11 @@ fun MapScreen(
     viewModel: MapViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                // Initialize MapViewModel with a concrete LocationService and Retrofit PinRepository
+                // Initialize MapViewModel with a concrete LocationService, Retrofit PinRepository, and SocketManager
                 MapViewModel(
                     locationProvider = LocationService(context.applicationContext),
-                    pinRepository = RetrofitClient.pinRepository
+                    pinRepository = RetrofitClient.pinRepository,
+                    socketManager = RetrofitClient.socketManager
                 )
             }
         }

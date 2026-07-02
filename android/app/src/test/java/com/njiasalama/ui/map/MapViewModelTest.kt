@@ -9,6 +9,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow // Importing Flow for mock data stream.
 import kotlinx.coroutines.flow.flowOf // Importing flowOf to generate immediate test streams.
+import kotlinx.coroutines.flow.emptyFlow
+import com.njiasalama.data.websocket.SocketManager
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -84,6 +86,12 @@ class FakePinRepository : PinRepository {
     }
 }
 
+class FakeSocketManager : SocketManager {
+    override fun connect() {}
+    override fun disconnect() {}
+    override fun getNewPinFlow(): Flow<DangerPin> = emptyFlow()
+}
+
 /**
  * Unit tests for the MapViewModel.
  * Unit tests are automated checks that test a single class in isolation.
@@ -126,7 +134,7 @@ class MapViewModelTest {
     fun testMockPinsLoadedSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange & Act: Create the ViewModel.
         // Upon initialization, it runs its 'init' block which calls 'loadPins()'.
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository())
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager())
 
         // Let the initialized coroutines (loadPins) complete
         this.testScheduler.advanceUntilIdle()
@@ -165,7 +173,7 @@ class MapViewModelTest {
     @Test
     fun testLocationUpdatesUpdateUserLocation() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange: Create the ViewModel with our fake location provider.
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository())
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager())
         this.testScheduler.advanceUntilIdle()
 
         // 2. Act: Request location updates to start streaming.
@@ -186,7 +194,7 @@ class MapViewModelTest {
     @Test
     fun testAddDangerPinLocallyAppendsPinSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange: Create the ViewModel with our fake location provider.
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository())
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager())
         this.testScheduler.advanceUntilIdle()
 
         // Retrieve initial Success state list (should have 2 mock pins)
@@ -216,5 +224,50 @@ class MapViewModelTest {
         assertEquals(36.8300, newlyAddedPin.longitude, 0.0)
         assertEquals(HazardType.DANGEROUS_TRAFFIC, newlyAddedPin.type)
         assertEquals("CurrentUser", newlyAddedPin.reportedBy)
+    }
+
+    /**
+     * Test case to verify that when SocketManager emits a new danger pin via its Flow,
+     * the ViewModel consumes it and appends it to its Success UI state list.
+     */
+    @Test
+    fun testWebSocketBroadcastAppendsPinSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
+        // Arrange: Prepare the live pin to be broadcasted
+        val livePin = DangerPin(
+            id = "socket-pin-999",
+            title = "Live Road Hazard",
+            description = "Construction debris",
+            latitude = -1.3500,
+            longitude = 36.8500,
+            type = HazardType.OTHER,
+            reportedBy = "LiveBroadcaster"
+        )
+        
+        // Define a shared flow to simulate live socket events dynamically
+        val liveFlow = kotlinx.coroutines.flow.MutableSharedFlow<DangerPin>()
+        val customSocketManager = object : SocketManager {
+            override fun connect() {}
+            override fun disconnect() {}
+            override fun getNewPinFlow(): Flow<DangerPin> = liveFlow
+        }
+        
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), customSocketManager)
+        this.testScheduler.advanceUntilIdle()
+        
+        val initialState = viewModel.uiState.value as MapUiState.Success
+        assertEquals(2, initialState.pins.size)
+        
+        // Act: Emit the pin from the WebSocket stream
+        liveFlow.emit(livePin)
+        this.testScheduler.advanceUntilIdle()
+        
+        // Assert: Confirm that the UI state has successfully updated to include the broadcasted pin
+        val updatedState = viewModel.uiState.value as MapUiState.Success
+        assertEquals(3, updatedState.pins.size)
+        
+        val addedPin = updatedState.pins.last()
+        assertEquals("socket-pin-999", addedPin.id)
+        assertEquals("Live Road Hazard", addedPin.title)
+        assertEquals(HazardType.OTHER, addedPin.type)
     }
 }
