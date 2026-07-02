@@ -31,6 +31,7 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.njiasalama.data.LocationService
+import com.njiasalama.data.RetrofitClient // Import our networking client singleton container
 
 /**
  * The main UI layout for the application map.
@@ -46,8 +47,11 @@ fun MapScreen(
     viewModel: MapViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                // Initialize MapViewModel with a concrete LocationService wrapper
-                MapViewModel(LocationService(context.applicationContext))
+                // Initialize MapViewModel with a concrete LocationService and Retrofit PinRepository
+                MapViewModel(
+                    locationProvider = LocationService(context.applicationContext),
+                    pinRepository = RetrofitClient.pinRepository
+                )
             }
         }
     )

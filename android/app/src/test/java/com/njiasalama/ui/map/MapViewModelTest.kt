@@ -2,7 +2,9 @@ package com.njiasalama.ui.map
 
 import com.google.android.gms.maps.model.LatLng // Importing LatLng to represent location coordinates.
 import com.njiasalama.data.LocationProvider // Importing LocationProvider to mock it.
+import com.njiasalama.domain.model.DangerPin
 import com.njiasalama.domain.model.HazardType
+import com.njiasalama.domain.repository.PinRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow // Importing Flow for mock data stream.
@@ -23,6 +25,62 @@ import org.junit.Test
 class FakeLocationProvider : LocationProvider {
     override fun getLocationUpdates(intervalMillis: Long): Flow<LatLng> {
         return flowOf(LatLng(-1.2921, 36.8219))
+    }
+}
+
+class FakePinRepository : PinRepository {
+    private val pins = mutableListOf(
+        DangerPin(
+            id = "1", 
+            title = "Deep Pothole", 
+            description = "Left side of the road, hard to spot at speed", 
+            latitude = -1.2925, 
+            longitude = 36.8225, 
+            type = HazardType.POTHOLE, 
+            reportedBy = "User1"
+        ),
+        DangerPin(
+            id = "2", 
+            title = "Broken Streetlight", 
+            description = "Completely dark corner right after the curve", 
+            latitude = -1.2910, 
+            longitude = 36.8200, 
+            type = HazardType.UNLIT_STREET, 
+            reportedBy = "User2"
+        )
+    )
+
+    override suspend fun getPins(): Result<List<DangerPin>> {
+        return Result.success(pins.toList())
+    }
+
+    override suspend fun getNearbyPins(
+        latitude: Double,
+        longitude: Double,
+        radiusMeters: Int
+    ): Result<List<DangerPin>> {
+        return Result.success(pins.toList())
+    }
+
+    override suspend fun reportPin(
+        title: String,
+        description: String,
+        type: HazardType,
+        latitude: Double,
+        longitude: Double,
+        reportedBy: String
+    ): Result<DangerPin> {
+        val newPin = DangerPin(
+            id = "pin-uuid-mock",
+            title = title,
+            description = description,
+            latitude = latitude,
+            longitude = longitude,
+            type = type,
+            reportedBy = reportedBy
+        )
+        pins.add(newPin)
+        return Result.success(newPin)
     }
 }
 
@@ -65,10 +123,13 @@ class MapViewModelTest {
      * the list of mock danger pins is successfully loaded and matches our details.
      */
     @Test
-    fun testMockPinsLoadedSuccessfully() {
+    fun testMockPinsLoadedSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange & Act: Create the ViewModel.
-        // Upon initialization, it runs its 'init' block which calls 'loadMockPins()'.
-        val viewModel = MapViewModel(FakeLocationProvider())
+        // Upon initialization, it runs its 'init' block which calls 'loadPins()'.
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository())
+
+        // Let the initialized coroutines (loadPins) complete
+        this.testScheduler.advanceUntilIdle()
 
         // 2. Assert: Verify the resulting state.
         val currentState = viewModel.uiState.value
@@ -102,12 +163,14 @@ class MapViewModelTest {
      * GPS coordinates from the provider and updates the ViewModel's userLocation flow state.
      */
     @Test
-    fun testLocationUpdatesUpdateUserLocation() {
+    fun testLocationUpdatesUpdateUserLocation() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange: Create the ViewModel with our fake location provider.
-        val viewModel = MapViewModel(FakeLocationProvider())
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository())
+        this.testScheduler.advanceUntilIdle()
 
         // 2. Act: Request location updates to start streaming.
         viewModel.startLocationUpdates()
+        this.testScheduler.advanceUntilIdle()
 
         // 3. Assert: Confirm that the userLocation flow gets updated with our fake coordinates.
         val userLocation = viewModel.userLocation.value
@@ -121,9 +184,10 @@ class MapViewModelTest {
      * successfully to the ViewModel's Success UI state list and increments its size.
      */
     @Test
-    fun testAddDangerPinLocallyAppendsPinSuccessfully() {
+    fun testAddDangerPinLocallyAppendsPinSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange: Create the ViewModel with our fake location provider.
-        val viewModel = MapViewModel(FakeLocationProvider())
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository())
+        this.testScheduler.advanceUntilIdle()
 
         // Retrieve initial Success state list (should have 2 mock pins)
         val initialState = viewModel.uiState.value as MapUiState.Success
@@ -137,6 +201,8 @@ class MapViewModelTest {
             longitude = 36.8300,
             type = HazardType.DANGEROUS_TRAFFIC
         )
+        // Let the asynchronous report coroutine finish
+        this.testScheduler.advanceUntilIdle()
 
         // 3. Assert: Verify the state has updated with 3 pins
         val updatedState = viewModel.uiState.value as MapUiState.Success

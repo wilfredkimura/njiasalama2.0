@@ -6,6 +6,7 @@ import com.google.android.gms.maps.model.LatLng // Importing LatLng class to rep
 import com.njiasalama.data.LocationProvider // Importing the LocationProvider interface instead of the concrete implementation.
 import com.njiasalama.domain.model.DangerPin// Importing the DangerPin data class from the domain model package to represent road hazard pins on the map.
 import com.njiasalama.domain.model.HazardType// Importing the HazardType enum class from the domain model package to categorize road hazards.
+import com.njiasalama.domain.repository.PinRepository // Importing PinRepository to query database endpoints.
 import kotlinx.coroutines.flow.MutableStateFlow // Importing the MutableStateFlow class from coroutines to create a read-write state flow.
 import kotlinx.coroutines.flow.StateFlow // Importing the StateFlow class to represent read-only streams.
 import kotlinx.coroutines.flow.asStateFlow // Importing the asStateFlow function to expose a read-only state flow.
@@ -14,9 +15,12 @@ import kotlinx.coroutines.launch // Importing the launch function to launch coro
 /**
  * Architectural state management layer. It interacts with data sources
  * and exposes clean, lifecycle-aware data flows straight to the UI.
- * We inject the LocationProvider interface to support clean unit testing.
+ * We inject the LocationProvider and PinRepository interfaces to support clean unit testing.
  */
-class MapViewModel(private val locationProvider: LocationProvider) : ViewModel() { // Class declaration for the MapViewModel, which is a subclass of ViewModel.
+class MapViewModel(
+    private val locationProvider: LocationProvider,
+    private val pinRepository: PinRepository
+) : ViewModel() {
 
     // Private read-write flow tracking the cyclist's current GPS location. Starts as null.
     private val _userLocation = MutableStateFlow<LatLng?>(null)
@@ -39,45 +43,25 @@ class MapViewModel(private val locationProvider: LocationProvider) : ViewModel()
 
     // Constructor block executed automatically as soon as the ViewModel is initialized
     init {
-        loadMockPins()
+        loadPins()
     }
 
     /**
-     * Simulates background asynchronous data loading.
-     * Uses viewModelScope to ensure that if the user closes the app, 
-     * ongoing computational operations are cancelled instantly, avoiding memory leaks.
+     * Fetches all road hazard pins from the database using our repository.
+     * Updates uiState Flow to Success(pins) on success, or Error on connection failure.
      */
-
-    //Simulates background asynchronous data loading. Uses viewModelScope to ensure that if the user closes the app,
-    // ongoing computational operations are cancelled instantly, avoiding memory leaks.
-    private fun loadMockPins() {
+    fun loadPins() {
         viewModelScope.launch {
-            // Setting up immediate local mock data points centered near Nairobi coordinates 
-            // for early execution testing before NestJS hooks are operational
-            val mockList = listOf(
-                DangerPin(
-                    id = "1", 
-                    title = "Deep Pothole", 
-                    description = "Left side of the road, hard to spot at speed", 
-                    latitude = -1.2925, 
-                    longitude = 36.8225, 
-                    type = HazardType.POTHOLE, 
-                    reportedBy = "User1"
-                ),
-                DangerPin(
-                    id = "2", 
-                    title = "Broken Streetlight", 
-                    description = "Completely dark corner right after the curve", 
-                    latitude = -1.2910, 
-                    longitude = 36.8200, 
-                    type = HazardType.UNLIT_STREET, 
-                    reportedBy = "User2"
-                )
-            )
-            
-            // Updating the flow value. Triggering this shifts our UI layer state completely
-            // from 'Loading' into 'Success', passing the mock array instantly.
-            _uiState.value = MapUiState.Success(mockList)
+            _uiState.value = MapUiState.Loading
+            pinRepository.getPins()
+                .onSuccess { pinsList ->
+                    _uiState.value = MapUiState.Success(pinsList)
+                }
+                .onFailure { exception ->
+                    _uiState.value = MapUiState.Error(
+                        exception.message ?: "Failed to connect to the backend server"
+                    )
+                }
         }
     }
 
@@ -95,8 +79,8 @@ class MapViewModel(private val locationProvider: LocationProvider) : ViewModel()
     }
 
     /**
-     * Adds a new DangerPin locally to the UI state.
-     * This allows immediate visualization of reported hazards on the map before backend persistence is fully wired.
+     * Submits a new road hazard pin to the server repository.
+     * If the API call fails (e.g. offline), we fall back to displaying the pin locally.
      */
     fun addDangerPinLocally(
         title: String,
@@ -105,19 +89,36 @@ class MapViewModel(private val locationProvider: LocationProvider) : ViewModel()
         longitude: Double,
         type: HazardType
     ) {
-        val currentState = _uiState.value
-        if (currentState is MapUiState.Success) {
-            val newPin = DangerPin(
-                id = java.util.UUID.randomUUID().toString(), // Generates a unique system ID for tracking
+        viewModelScope.launch {
+            pinRepository.reportPin(
                 title = title,
                 description = description,
                 latitude = latitude,
                 longitude = longitude,
                 type = type,
-                reportedBy = "CurrentUser" // Placeholder user ID until Google Login is integrated
-            )
-            // Emit the updated list to trigger screen refreshes instantly
-            _uiState.value = MapUiState.Success(currentState.pins + newPin)
+                reportedBy = "CurrentUser" // Placeholder until authentication flow is integrated
+            ).onSuccess { newPin ->
+                val currentState = _uiState.value
+                if (currentState is MapUiState.Success) {
+                    // Update state flow with the returned persisted pin details
+                    _uiState.value = MapUiState.Success(currentState.pins + newPin)
+                }
+            }.onFailure {
+                // Offline fallback mechanism: Place pin locally so cyclist gets instant visual confirmation
+                val currentState = _uiState.value
+                if (currentState is MapUiState.Success) {
+                    val localFallbackPin = DangerPin(
+                        id = java.util.UUID.randomUUID().toString(),
+                        title = title,
+                        description = description,
+                        latitude = latitude,
+                        longitude = longitude,
+                        type = type,
+                        reportedBy = "CurrentUser (Offline)"
+                    )
+                    _uiState.value = MapUiState.Success(currentState.pins + localFallbackPin)
+                }
+            }
         }
     }
 }
