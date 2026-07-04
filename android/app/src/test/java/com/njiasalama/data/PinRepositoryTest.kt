@@ -2,6 +2,10 @@ package com.njiasalama.data
 
 import com.njiasalama.domain.model.DangerPin
 import com.njiasalama.domain.model.HazardType
+import com.njiasalama.domain.model.AuthResponse
+import com.njiasalama.domain.model.GoogleAuthRequest
+import com.njiasalama.domain.model.LoginRequest
+import com.njiasalama.domain.model.SignUpRequest
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -31,7 +35,7 @@ class FakeNjiaSalamaApi(
         return responsePins
     }
 
-    override suspend fun createPin(request: CreatePinRequest): DangerPin {
+    override suspend fun createPin(token: String, request: CreatePinRequest): DangerPin {
         if (shouldFail) throw java.io.IOException("Socket connection refused")
         return DangerPin(
             id = "generated-uuid-xyz",
@@ -42,6 +46,21 @@ class FakeNjiaSalamaApi(
             type = request.type,
             reportedBy = request.reportedBy
         )
+    }
+
+    override suspend fun signUp(request: SignUpRequest): AuthResponse {
+        if (shouldFail) throw java.io.IOException("Auth server error")
+        return AuthResponse("fake-jwt-token")
+    }
+
+    override suspend fun login(request: LoginRequest): AuthResponse {
+        if (shouldFail) throw java.io.IOException("Auth server error")
+        return AuthResponse("fake-jwt-token")
+    }
+
+    override suspend fun googleLogin(request: GoogleAuthRequest): AuthResponse {
+        if (shouldFail) throw java.io.IOException("Auth server error")
+        return AuthResponse("fake-jwt-token")
     }
 }
 
@@ -89,6 +108,7 @@ class PinRepositoryTest {
 
         // Act: Report road hazard pin
         val result = repository.reportPin(
+            token = "fake-token",
             title = "Pothole",
             description = "Deep pothole",
             type = HazardType.POTHOLE,

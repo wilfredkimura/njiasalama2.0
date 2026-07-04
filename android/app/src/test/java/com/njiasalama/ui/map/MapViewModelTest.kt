@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.Flow // Importing Flow for mock data stream.
 import kotlinx.coroutines.flow.flowOf // Importing flowOf to generate immediate test streams.
 import kotlinx.coroutines.flow.emptyFlow
 import com.njiasalama.data.websocket.SocketManager
+import com.njiasalama.domain.repository.AuthRepository
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -65,6 +67,7 @@ class FakePinRepository : PinRepository {
     }
 
     override suspend fun reportPin(
+        token: String,
         title: String,
         description: String,
         type: HazardType,
@@ -90,6 +93,19 @@ class FakeSocketManager : SocketManager {
     override fun connect() {}
     override fun disconnect() {}
     override fun getNewPinFlow(): Flow<DangerPin> = emptyFlow()
+}
+
+class FakeAuthRepository : AuthRepository {
+    private val _isLoggedIn = kotlinx.coroutines.flow.MutableStateFlow(true)
+    override val isLoggedIn = _isLoggedIn.asStateFlow()
+
+    override suspend fun login(email: String, password: String) = Result.success(com.njiasalama.domain.model.AuthResponse("fake-jwt"))
+    override suspend fun signUp(email: String, password: String, name: String) = Result.success(com.njiasalama.domain.model.AuthResponse("fake-jwt"))
+    override suspend fun googleLogin(idToken: String) = Result.success(com.njiasalama.domain.model.AuthResponse("fake-jwt"))
+    override fun getToken(): String? = "fake-jwt"
+    override fun getUserName(): String? = "Fake Cyclist"
+    override fun saveToken(token: String) { _isLoggedIn.value = true }
+    override fun logout() { _isLoggedIn.value = false }
 }
 
 /**
@@ -134,7 +150,7 @@ class MapViewModelTest {
     fun testMockPinsLoadedSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange & Act: Create the ViewModel.
         // Upon initialization, it runs its 'init' block which calls 'loadPins()'.
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager())
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
 
         // Let the initialized coroutines (loadPins) complete
         this.testScheduler.advanceUntilIdle()
@@ -173,7 +189,7 @@ class MapViewModelTest {
     @Test
     fun testLocationUpdatesUpdateUserLocation() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange: Create the ViewModel with our fake location provider.
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager())
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
         this.testScheduler.advanceUntilIdle()
 
         // 2. Act: Request location updates to start streaming.
@@ -194,7 +210,7 @@ class MapViewModelTest {
     @Test
     fun testAddDangerPinLocallyAppendsPinSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange: Create the ViewModel with our fake location provider.
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager())
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
         this.testScheduler.advanceUntilIdle()
 
         // Retrieve initial Success state list (should have 2 mock pins)
@@ -223,7 +239,7 @@ class MapViewModelTest {
         assertEquals(-1.3000, newlyAddedPin.latitude, 0.0)
         assertEquals(36.8300, newlyAddedPin.longitude, 0.0)
         assertEquals(HazardType.DANGEROUS_TRAFFIC, newlyAddedPin.type)
-        assertEquals("CurrentUser", newlyAddedPin.reportedBy)
+        assertEquals("Fake Cyclist", newlyAddedPin.reportedBy)
     }
 
     /**
@@ -251,7 +267,7 @@ class MapViewModelTest {
             override fun getNewPinFlow(): Flow<DangerPin> = liveFlow
         }
         
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), customSocketManager)
+        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), customSocketManager, FakeAuthRepository())
         this.testScheduler.advanceUntilIdle()
         
         val initialState = viewModel.uiState.value as MapUiState.Success
