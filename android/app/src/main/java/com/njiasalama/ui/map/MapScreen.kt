@@ -47,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -116,7 +117,7 @@ fun MapScreen(
     var hasCenteredCamera by remember { mutableStateOf(false) }
 
     // Temporary state to hold coordinates of a map long-press gesture before showing the add pin dialog
-    var selectedLatLngForNewPin by remember { mutableStateOf<LatLng?>(null) }
+    var selectedLatLngForNewPin by rememberSaveable { mutableStateOf<LatLng?>(null) }
 
     // State to hold currently selected pin for showing detailed bottom card
     var selectedPin by remember { mutableStateOf<DangerPin?>(null) }

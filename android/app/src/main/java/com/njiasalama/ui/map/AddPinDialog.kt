@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,10 +57,10 @@ fun AddPinDialog(
     onSubmit: (title: String, description: String, type: HazardType, imageUri: android.net.Uri?) -> Unit
 ) {
     // Local state holders for the text form inputs
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf(HazardType.POTHOLE) }
-    var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var title by rememberSaveable { mutableStateOf("") }
+    var description by rememberSaveable { mutableStateOf("") }
+    var selectedType by rememberSaveable { mutableStateOf(HazardType.POTHOLE) }
+    var selectedImageUri by rememberSaveable { mutableStateOf<android.net.Uri?>(null) }
 
     // Launcher contract to open the system file picker to select images
     val imagePickerLauncher = rememberLauncherForActivityResult(
