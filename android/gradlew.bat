@@ -23,6 +23,9 @@
 @rem
 @rem ##########################################################################
 
+set JAVA_HOME=C:\Program Files\Android\Android Studio\jbr
+set PATH=C:\Program Files\Android\Android Studio\jbr\bin;%PATH%
+
 @rem Set local scope for the variables with windows NT shell
 if "%OS%"=="Windows_NT" setlocal
 
