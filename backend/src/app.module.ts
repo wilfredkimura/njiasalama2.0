@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm'; // Importing TypeORM module to 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PinsModule } from './pins/pins.module'; // Importing the PinsModule to expose its endpoints and services.
+import { UsersModule } from './users/users.module'; // Registering user identities module
+import { AuthModule } from './auth/auth.module';   // Registering authentication controller module
 
 /**
  * Configuration factory for TypeORM module options.
@@ -44,6 +46,8 @@ export function getTypeOrmModuleOptions(configService: ConfigService) {
       useFactory: getTypeOrmModuleOptions, // Bind our testable options factory function
     }),
     PinsModule, // Register our newly created PinsModule containing controller routes and services
+    UsersModule, // Register users operations
+    AuthModule,  // Register auth endpoints and JWT signature validations
   ],
   controllers: [AppController],
   providers: [AppService],
