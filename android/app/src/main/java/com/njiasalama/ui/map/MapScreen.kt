@@ -633,7 +633,7 @@ fun MapScreen(
                         if (imgUrl.isNotBlank()) {
                             Spacer(modifier = Modifier.height(12.dp))
                             AsyncImage(
-                                model = imgUrl,
+                                model = getCoilModel(imgUrl),
                                 contentDescription = "Hazard Picture",
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -719,4 +719,18 @@ private fun clusterPins(pins: List<DangerPin>, zoom: Float): List<Cluster> {
     }
     
     return clusters
+}
+
+private fun getCoilModel(model: String?): Any? {
+    if (model == null) return null
+    if (model.startsWith("data:image/") && model.contains("base64,")) {
+        return try {
+            val base64Content = model.substringAfter("base64,")
+            android.util.Base64.decode(base64Content, android.util.Base64.DEFAULT)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            model
+        }
+    }
+    return model
 }
