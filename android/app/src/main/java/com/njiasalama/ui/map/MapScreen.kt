@@ -89,9 +89,9 @@ fun MapScreen(
         factory = viewModelFactory {
             initializer {
                 val appContext = context.applicationContext
-                // Initialize MapViewModel with context, LocationService, Retrofit PinRepository, SocketManager, and AuthRepository
+                // Initialize MapViewModel with filesDir, LocationService, Retrofit PinRepository, SocketManager, and AuthRepository
                 MapViewModel(
-                    context = appContext,
+                    filesDir = appContext.filesDir,
                     locationProvider = LocationService(appContext),
                     pinRepository = RetrofitClient.getPinRepository(appContext),
                     socketManager = RetrofitClient.socketManager,
@@ -313,15 +313,19 @@ fun MapScreen(
                 latLng = latLng,
                 onDismiss = { selectedLatLngForNewPin = null },
                 onSubmit = { title, description, type, imageUri ->
-                    viewModel.addDangerPinLocally(
-                        context = context,
-                        title = title,
-                        description = description,
-                        latitude = latLng.latitude,
-                        longitude = latLng.longitude,
-                        type = type,
-                        imageUri = imageUri
-                    )
+                    coroutineScope.launch {
+                        val base64Image = imageUri?.let { uri ->
+                            com.njiasalama.data.ImageUtils.compressUriToBase64(context, uri)
+                        }
+                        viewModel.addDangerPinLocally(
+                            title = title,
+                            description = description,
+                            latitude = latLng.latitude,
+                            longitude = latLng.longitude,
+                            type = type,
+                            base64Image = base64Image
+                        )
+                    }
                     selectedLatLngForNewPin = null
                 }
             )
