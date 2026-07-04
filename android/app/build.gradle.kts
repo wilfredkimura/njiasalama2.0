@@ -45,6 +45,9 @@ android {
 
         val backendUrl = localProperties.getProperty("BACKEND_URL") ?: "http://10.0.2.2:3000/"
         buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
+
+        val googleClientId = localProperties.getProperty("GOOGLE_CLIENT_ID") ?: "placeholder_google_client_id"
+        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleClientId\"")
     }
 
     buildTypes {
@@ -84,6 +87,10 @@ dependencies {
     implementation(libs.socket.io.client) {
         exclude(group = "org.json", module = "json")
     }
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
+    implementation(libs.androidx.compose.material.icons.core)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
