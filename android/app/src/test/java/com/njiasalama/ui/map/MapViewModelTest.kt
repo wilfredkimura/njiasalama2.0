@@ -116,6 +116,25 @@ class FakeAuthRepository : AuthRepository {
 @OptIn(ExperimentalCoroutinesApi::class)
 class MapViewModelTest {
 
+    @get:Rule
+    val tempFolder = TemporaryFolder()
+
+    private fun getFakeContext(): android.content.Context {
+        return object : android.test.mock.MockContext() {
+            override fun getCacheDir(): java.io.File {
+                val dir = java.io.File(tempFolder.root, "cache")
+                if (!dir.exists()) dir.mkdirs()
+                return dir
+            }
+            override fun getFilesDir(): java.io.File {
+                val dir = java.io.File(tempFolder.root, "files")
+                if (!dir.exists()) dir.mkdirs()
+                return dir
+            }
+            override fun getApplicationContext(): android.content.Context = this
+        }
+    }
+
     // A Test Dispatcher simulates the Android Main UI Thread.
     // UnconfinedTestDispatcher runs coroutine tasks immediately on the test thread,
     // which makes testing asynchronous code simple and direct.
@@ -150,7 +169,7 @@ class MapViewModelTest {
     fun testMockPinsLoadedSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange & Act: Create the ViewModel.
         // Upon initialization, it runs its 'init' block which calls 'loadPins()'.
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
+        val viewModel = MapViewModel(getFakeContext(), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
 
         // Let the initialized coroutines (loadPins) complete
         this.testScheduler.advanceUntilIdle()
@@ -189,7 +208,7 @@ class MapViewModelTest {
     @Test
     fun testLocationUpdatesUpdateUserLocation() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange: Create the ViewModel with our fake location provider.
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
+        val viewModel = MapViewModel(getFakeContext(), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
         this.testScheduler.advanceUntilIdle()
 
         // 2. Act: Request location updates to start streaming.
@@ -210,7 +229,7 @@ class MapViewModelTest {
     @Test
     fun testAddDangerPinLocallyAppendsPinSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange: Create the ViewModel with our fake location provider.
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
+        val viewModel = MapViewModel(getFakeContext(), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
         this.testScheduler.advanceUntilIdle()
 
         // Retrieve initial Success state list (should have 2 mock pins)
@@ -219,11 +238,13 @@ class MapViewModelTest {
 
         // 2. Act: Call addDangerPinLocally to append a third pin
         viewModel.addDangerPinLocally(
+            context = getFakeContext(),
             title = "Dangerous Traffic",
             description = "Construction zone blocks path",
             latitude = -1.3000,
             longitude = 36.8300,
-            type = HazardType.DANGEROUS_TRAFFIC
+            type = HazardType.DANGEROUS_TRAFFIC,
+            imageUri = null
         )
         // Let the asynchronous report coroutine finish
         this.testScheduler.advanceUntilIdle()
@@ -267,7 +288,7 @@ class MapViewModelTest {
             override fun getNewPinFlow(): Flow<DangerPin> = liveFlow
         }
         
-        val viewModel = MapViewModel(FakeLocationProvider(), FakePinRepository(), customSocketManager, FakeAuthRepository())
+        val viewModel = MapViewModel(getFakeContext(), FakeLocationProvider(), FakePinRepository(), customSocketManager, FakeAuthRepository())
         this.testScheduler.advanceUntilIdle()
         
         val initialState = viewModel.uiState.value as MapUiState.Success

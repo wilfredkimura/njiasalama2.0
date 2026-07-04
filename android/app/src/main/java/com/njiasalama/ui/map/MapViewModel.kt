@@ -9,6 +9,7 @@ import com.njiasalama.domain.model.DangerPin// Importing the DangerPin data clas
 import com.njiasalama.domain.model.HazardType// Importing the HazardType enum class from the domain model package to categorize road hazards.
 import com.njiasalama.domain.repository.PinRepository // Importing PinRepository to query database endpoints.
 import com.njiasalama.domain.repository.AuthRepository // Importing AuthRepository to manage session details.
+import com.njiasalama.data.ImageUtils // Importing our image utility compressor helper
 import kotlinx.coroutines.flow.MutableStateFlow // Importing the MutableStateFlow class from coroutines to create a read-write state flow.
 import kotlinx.coroutines.flow.StateFlow // Importing the StateFlow class to represent read-only streams.
 import kotlinx.coroutines.flow.asStateFlow // Importing the asStateFlow function to expose a read-only state flow.
@@ -20,11 +21,42 @@ import kotlinx.coroutines.launch // Importing the launch function to launch coro
  * We inject the LocationProvider, PinRepository, and SocketManager interfaces to support clean unit testing.
  */
 class MapViewModel(
+    private val context: android.content.Context,
     private val locationProvider: LocationProvider,
     private val pinRepository: PinRepository,
     private val socketManager: SocketManager,
     private val authRepository: AuthRepository
 ) : ViewModel() {
+
+    private val gson = com.google.gson.Gson()
+    private val offlineFileName = "offline_pins.json"
+
+    // Reads queued offline-reported hazards from local storage file
+    private fun getOfflinePins(context: android.content.Context): List<DangerPin> {
+        return try {
+            val file = java.io.File(context.filesDir, offlineFileName)
+            if (!file.exists()) return emptyList()
+            val json = file.readText()
+            val type = object : com.google.gson.reflect.TypeToken<List<DangerPin>>() {}.type
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    // Appends an offline hazard pin to the local file storage queue
+    private fun saveOfflinePin(context: android.content.Context, pin: DangerPin) {
+        try {
+            val file = java.io.File(context.filesDir, offlineFileName)
+            val currentList = getOfflinePins(context)
+            val updatedList = currentList + pin
+            val json = gson.toJson(updatedList)
+            file.writeText(json)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     // Expose the logged-in cyclist's name for displaying on the Profile Icon overlay
     val currentUserName: String
@@ -65,18 +97,25 @@ class MapViewModel(
     /**
      * Fetches all road hazard pins from the database using our repository.
      * Updates uiState Flow to Success(pins) on success, or Error on connection failure.
+     * Combines retrieved pins with offline queued pins.
      */
     fun loadPins() {
         viewModelScope.launch {
             _uiState.value = MapUiState.Loading
             pinRepository.getPins()
                 .onSuccess { pinsList ->
-                    _uiState.value = MapUiState.Success(pinsList)
+                    val offlinePins = getOfflinePins(context)
+                    _uiState.value = MapUiState.Success(pinsList + offlinePins)
                 }
                 .onFailure { exception ->
-                    _uiState.value = MapUiState.Error(
-                        exception.message ?: "Failed to connect to the backend server"
-                    )
+                    val offlinePins = getOfflinePins(context)
+                    if (offlinePins.isNotEmpty()) {
+                        _uiState.value = MapUiState.Success(offlinePins)
+                    } else {
+                        _uiState.value = MapUiState.Error(
+                            exception.message ?: "Failed to connect to the backend server"
+                        )
+                    }
                 }
         }
     }
@@ -119,16 +158,19 @@ class MapViewModel(
 
     /**
      * Submits a new road hazard pin to the server repository.
-     * If the API call fails (e.g. offline), we fall back to displaying the pin locally.
+     * Compress photo as Base64. If API call fails, fall back to offline storage queue.
      */
     fun addDangerPinLocally(
+        context: android.content.Context,
         title: String,
         description: String,
         latitude: Double,
         longitude: Double,
-        type: HazardType
+        type: HazardType,
+        imageUri: android.net.Uri?
     ) {
         viewModelScope.launch {
+            val base64Image = imageUri?.let { ImageUtils.compressUriToBase64(context, it) }
             val token = authRepository.getToken() ?: ""
             pinRepository.reportPin(
                 token = token,
@@ -137,11 +179,11 @@ class MapViewModel(
                 latitude = latitude,
                 longitude = longitude,
                 type = type,
-                reportedBy = currentUserName
+                reportedBy = currentUserName,
+                imageUrl = base64Image
             ).onSuccess { newPin ->
                 val currentState = _uiState.value
                 if (currentState is MapUiState.Success) {
-                    // Update state flow with the returned persisted pin details
                     _uiState.value = MapUiState.Success(currentState.pins + newPin)
                 }
             }.onFailure {
@@ -155,8 +197,10 @@ class MapViewModel(
                         latitude = latitude,
                         longitude = longitude,
                         type = type,
-                        reportedBy = "$currentUserName (Offline)"
+                        reportedBy = "$currentUserName (Offline)",
+                        imageUrl = base64Image ?: imageUri?.toString()
                     )
+                    saveOfflinePin(context, localFallbackPin)
                     _uiState.value = MapUiState.Success(currentState.pins + localFallbackPin)
                 }
             }
