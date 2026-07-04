@@ -38,4 +38,9 @@ export class CreatePinDto {
   @IsOptional()
   @IsString({ message: 'Reported by must be a valid text string' })
   reportedBy?: string;
+
+  // Optional image data URI / URL
+  @IsOptional()
+  @IsString({ message: 'Image URL must be a valid text string' })
+  imageUrl?: string;
 }

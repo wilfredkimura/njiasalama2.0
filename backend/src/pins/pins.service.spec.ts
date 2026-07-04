@@ -57,6 +57,7 @@ describe('PinsService', () => {
         type: 'POTHOLE' as const,
         latitude: -1.2921,
         longitude: 36.8219,
+        imageUrl: 'data:image/jpeg;base64,mockdata',
       };
 
       const result = await service.create(dto);
