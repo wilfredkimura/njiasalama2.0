@@ -9,11 +9,49 @@ import com.njiasalama.domain.repository.PinRepository
  * Uses Kotlin's runCatching block to safely catch exceptions (such as timeouts or connection issues).
  */
 class PinRepositoryImpl(
+    private val context: android.content.Context,
     private val api: NjiaSalamaApi
 ) : PinRepository {
 
+    private val gson = com.google.gson.Gson()
+    private val cacheFileName = "cached_pins.json"
+
+    private fun getCachedPins(): List<DangerPin> {
+        return try {
+            val file = java.io.File(context.cacheDir, cacheFileName)
+            if (!file.exists()) return emptyList()
+            val json = file.readText()
+            val type = object : com.google.gson.reflect.TypeToken<List<DangerPin>>() {}.type
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    private fun cachePins(pins: List<DangerPin>) {
+        try {
+            val file = java.io.File(context.cacheDir, cacheFileName)
+            val json = gson.toJson(pins)
+            file.writeText(json)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     override suspend fun getPins(): Result<List<DangerPin>> = runCatching {
-        api.getPins()
+        try {
+            val pins = api.getPins()
+            cachePins(pins)
+            pins
+        } catch (e: Exception) {
+            val cached = getCachedPins()
+            if (cached.isNotEmpty()) {
+                cached
+            } else {
+                throw e
+            }
+        }
     }
 
     override suspend fun getNearbyPins(
