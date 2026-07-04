@@ -12,3 +12,6 @@
 
 # Environments
 **.env
+
+# Compiled Android packages
+*.apk
