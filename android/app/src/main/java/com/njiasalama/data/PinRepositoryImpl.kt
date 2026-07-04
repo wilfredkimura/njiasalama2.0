@@ -25,6 +25,7 @@ class PinRepositoryImpl(
     }
 
     override suspend fun reportPin(
+        token: String,
         title: String,
         description: String,
         type: HazardType,
@@ -40,6 +41,6 @@ class PinRepositoryImpl(
             longitude = longitude,
             reportedBy = reportedBy
         )
-        api.createPin(request)
+        api.createPin("Bearer $token", request)
     }
 }

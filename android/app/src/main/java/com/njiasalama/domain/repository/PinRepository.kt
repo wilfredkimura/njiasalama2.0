@@ -27,6 +27,7 @@ interface PinRepository {
      * Submits a new cyclist-reported road hazard to the backend database.
      */
     suspend fun reportPin(
+        token: String,
         title: String,
         description: String,
         type: HazardType,

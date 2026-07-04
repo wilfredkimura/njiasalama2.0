@@ -5,9 +5,23 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,11 +61,12 @@ fun MapScreen(
     viewModel: MapViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                // Initialize MapViewModel with a concrete LocationService, Retrofit PinRepository, and SocketManager
+                // Initialize MapViewModel with LocationService, Retrofit PinRepository, SocketManager, and AuthRepository
                 MapViewModel(
                     locationProvider = LocationService(context.applicationContext),
                     pinRepository = RetrofitClient.pinRepository,
-                    socketManager = RetrofitClient.socketManager
+                    socketManager = RetrofitClient.socketManager,
+                    authRepository = RetrofitClient.getAuthRepository(context.applicationContext)
                 )
             }
         }
@@ -208,6 +223,60 @@ fun MapScreen(
                         type = type
                     )
                     selectedLatLngForNewPin = null
+                }
+            )
+        }
+
+        // Profile and Logout Overlay Menu
+        var showProfileMenu by remember { mutableStateOf(false) }
+        val cyclistName = viewModel.currentUserName
+
+        // Top right floating profile action button
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+        ) {
+            FloatingActionButton(
+                onClick = { showProfileMenu = true },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = androidx.compose.foundation.shape.CircleShape,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = "User Profile",
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        }
+
+        // Profile details / Logout popup dialog
+        if (showProfileMenu) {
+            AlertDialog(
+                onDismissRequest = { showProfileMenu = false },
+                title = { Text("Cyclist Profile") },
+                text = {
+                    Column {
+                        Text("Logged in as:", fontWeight = FontWeight.SemiBold)
+                        Text(cyclistName, color = MaterialTheme.colorScheme.primary, fontSize = 18.sp, modifier = Modifier.padding(top = 4.dp))
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showProfileMenu = false
+                            viewModel.logout()
+                        }
+                    ) {
+                        Text("Sign Out", color = Color.Red, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showProfileMenu = false }) {
+                        Text("Close")
+                    }
                 }
             )
         }

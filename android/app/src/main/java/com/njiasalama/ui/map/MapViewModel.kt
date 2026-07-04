@@ -8,6 +8,7 @@ import com.njiasalama.data.websocket.SocketManager // Importing SocketManager to
 import com.njiasalama.domain.model.DangerPin// Importing the DangerPin data class from the domain model package to represent road hazard pins on the map.
 import com.njiasalama.domain.model.HazardType// Importing the HazardType enum class from the domain model package to categorize road hazards.
 import com.njiasalama.domain.repository.PinRepository // Importing PinRepository to query database endpoints.
+import com.njiasalama.domain.repository.AuthRepository // Importing AuthRepository to manage session details.
 import kotlinx.coroutines.flow.MutableStateFlow // Importing the MutableStateFlow class from coroutines to create a read-write state flow.
 import kotlinx.coroutines.flow.StateFlow // Importing the StateFlow class to represent read-only streams.
 import kotlinx.coroutines.flow.asStateFlow // Importing the asStateFlow function to expose a read-only state flow.
@@ -21,8 +22,20 @@ import kotlinx.coroutines.launch // Importing the launch function to launch coro
 class MapViewModel(
     private val locationProvider: LocationProvider,
     private val pinRepository: PinRepository,
-    private val socketManager: SocketManager
+    private val socketManager: SocketManager,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
+
+    // Expose the logged-in cyclist's name for displaying on the Profile Icon overlay
+    val currentUserName: String
+        get() = authRepository.getUserName() ?: "User"
+
+    /**
+     * Triggers logout flow, which updates SharedPreferences and redirects the user to the AuthScreen
+     */
+    fun logout() {
+        authRepository.logout()
+    }
 
     // Private read-write flow tracking the cyclist's current GPS location. Starts as null.
     private val _userLocation = MutableStateFlow<LatLng?>(null)
@@ -116,13 +129,15 @@ class MapViewModel(
         type: HazardType
     ) {
         viewModelScope.launch {
+            val token = authRepository.getToken() ?: ""
             pinRepository.reportPin(
+                token = token,
                 title = title,
                 description = description,
                 latitude = latitude,
                 longitude = longitude,
                 type = type,
-                reportedBy = "CurrentUser" // Placeholder until authentication flow is integrated
+                reportedBy = currentUserName
             ).onSuccess { newPin ->
                 val currentState = _uiState.value
                 if (currentState is MapUiState.Success) {
@@ -140,7 +155,7 @@ class MapViewModel(
                         latitude = latitude,
                         longitude = longitude,
                         type = type,
-                        reportedBy = "CurrentUser (Offline)"
+                        reportedBy = "$currentUserName (Offline)"
                     )
                     _uiState.value = MapUiState.Success(currentState.pins + localFallbackPin)
                 }

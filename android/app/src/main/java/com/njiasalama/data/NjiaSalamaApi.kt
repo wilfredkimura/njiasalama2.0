@@ -2,8 +2,13 @@ package com.njiasalama.data
 
 import com.njiasalama.domain.model.DangerPin
 import com.njiasalama.domain.model.HazardType
+import com.njiasalama.domain.model.AuthResponse
+import com.njiasalama.domain.model.GoogleAuthRequest
+import com.njiasalama.domain.model.LoginRequest
+import com.njiasalama.domain.model.SignUpRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Query
 
@@ -50,6 +55,34 @@ interface NjiaSalamaApi {
      */
     @POST("pins")
     suspend fun createPin(
+        @Header("Authorization") token: String,
         @Body request: CreatePinRequest
     ): DangerPin
+
+    /**
+     * Maps to: POST /auth/signup
+     * Sends user registration details to standard email sign up endpoint.
+     */
+    @POST("auth/signup")
+    suspend fun signUp(
+        @Body request: SignUpRequest
+    ): AuthResponse
+
+    /**
+     * Maps to: POST /auth/login
+     * Sends email/password credentials to login endpoint.
+     */
+    @POST("auth/login")
+    suspend fun login(
+        @Body request: LoginRequest
+    ): AuthResponse
+
+    /**
+     * Maps to: POST /auth/google
+     * Sends verified Google ID token to google auth endpoint.
+     */
+    @POST("auth/google")
+    suspend fun googleLogin(
+        @Body request: GoogleAuthRequest
+    ): AuthResponse
 }

@@ -1,7 +1,9 @@
 package com.njiasalama.data
 
+import android.content.Context
 import com.njiasalama.data.websocket.SocketManager
 import com.njiasalama.data.websocket.SocketManagerImpl
+import com.njiasalama.domain.repository.AuthRepository
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
@@ -31,5 +33,20 @@ object RetrofitClient {
     // Lazily builds the SocketManager client mapping our WebSockets server connection
     val socketManager: SocketManager by lazy {
         SocketManagerImpl(socketUrl = BASE_URL)
+    }
+
+    // Cached singleton instance of the AuthRepository
+    private var _authRepository: AuthRepository? = null
+
+    /**
+     * Retrieves the global AuthRepository instance, initializing it safely if not already built.
+     * Uses double-checked locking for thread safety and consumes applicationContext to prevent memory leaks.
+     */
+    fun getAuthRepository(context: Context): AuthRepository {
+        return _authRepository ?: synchronized(this) {
+            _authRepository ?: AuthRepositoryImpl(context.applicationContext, api).also {
+                _authRepository = it
+            }
+        }
     }
 }
