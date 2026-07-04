@@ -20,7 +20,9 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 /**
  * A test double implementing the LocationProvider contract.
@@ -73,7 +75,8 @@ class FakePinRepository : PinRepository {
         type: HazardType,
         latitude: Double,
         longitude: Double,
-        reportedBy: String
+        reportedBy: String,
+        imageUrl: String?
     ): Result<DangerPin> {
         val newPin = DangerPin(
             id = "pin-uuid-mock",
@@ -82,7 +85,8 @@ class FakePinRepository : PinRepository {
             latitude = latitude,
             longitude = longitude,
             type = type,
-            reportedBy = reportedBy
+            reportedBy = reportedBy,
+            imageUrl = imageUrl
         )
         pins.add(newPin)
         return Result.success(newPin)
@@ -116,24 +120,9 @@ class FakeAuthRepository : AuthRepository {
 @OptIn(ExperimentalCoroutinesApi::class)
 class MapViewModelTest {
 
+    // JUnit Rule to create temporary files directory for mock view model testing
     @get:Rule
     val tempFolder = TemporaryFolder()
-
-    private fun getFakeContext(): android.content.Context {
-        return object : android.test.mock.MockContext() {
-            override fun getCacheDir(): java.io.File {
-                val dir = java.io.File(tempFolder.root, "cache")
-                if (!dir.exists()) dir.mkdirs()
-                return dir
-            }
-            override fun getFilesDir(): java.io.File {
-                val dir = java.io.File(tempFolder.root, "files")
-                if (!dir.exists()) dir.mkdirs()
-                return dir
-            }
-            override fun getApplicationContext(): android.content.Context = this
-        }
-    }
 
     // A Test Dispatcher simulates the Android Main UI Thread.
     // UnconfinedTestDispatcher runs coroutine tasks immediately on the test thread,
@@ -169,7 +158,7 @@ class MapViewModelTest {
     fun testMockPinsLoadedSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange & Act: Create the ViewModel.
         // Upon initialization, it runs its 'init' block which calls 'loadPins()'.
-        val viewModel = MapViewModel(getFakeContext(), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
+        val viewModel = MapViewModel(tempFolder.newFolder("files"), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
 
         // Let the initialized coroutines (loadPins) complete
         this.testScheduler.advanceUntilIdle()
@@ -208,7 +197,7 @@ class MapViewModelTest {
     @Test
     fun testLocationUpdatesUpdateUserLocation() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange: Create the ViewModel with our fake location provider.
-        val viewModel = MapViewModel(getFakeContext(), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
+        val viewModel = MapViewModel(tempFolder.newFolder("files"), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
         this.testScheduler.advanceUntilIdle()
 
         // 2. Act: Request location updates to start streaming.
@@ -229,7 +218,7 @@ class MapViewModelTest {
     @Test
     fun testAddDangerPinLocallyAppendsPinSuccessfully() = kotlinx.coroutines.test.runTest(testDispatcher) {
         // 1. Arrange: Create the ViewModel with our fake location provider.
-        val viewModel = MapViewModel(getFakeContext(), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
+        val viewModel = MapViewModel(tempFolder.newFolder("files"), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
         this.testScheduler.advanceUntilIdle()
 
         // Retrieve initial Success state list (should have 2 mock pins)
@@ -238,13 +227,12 @@ class MapViewModelTest {
 
         // 2. Act: Call addDangerPinLocally to append a third pin
         viewModel.addDangerPinLocally(
-            context = getFakeContext(),
             title = "Dangerous Traffic",
             description = "Construction zone blocks path",
             latitude = -1.3000,
             longitude = 36.8300,
             type = HazardType.DANGEROUS_TRAFFIC,
-            imageUri = null
+            base64Image = null
         )
         // Let the asynchronous report coroutine finish
         this.testScheduler.advanceUntilIdle()
@@ -288,7 +276,7 @@ class MapViewModelTest {
             override fun getNewPinFlow(): Flow<DangerPin> = liveFlow
         }
         
-        val viewModel = MapViewModel(getFakeContext(), FakeLocationProvider(), FakePinRepository(), customSocketManager, FakeAuthRepository())
+        val viewModel = MapViewModel(tempFolder.newFolder("files"), FakeLocationProvider(), FakePinRepository(), customSocketManager, FakeAuthRepository())
         this.testScheduler.advanceUntilIdle()
         
         val initialState = viewModel.uiState.value as MapUiState.Success

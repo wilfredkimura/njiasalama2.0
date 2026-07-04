@@ -9,7 +9,9 @@ import com.njiasalama.domain.model.SignUpRequest
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 /**
  * A test double for the Retrofit API interface.
@@ -44,7 +46,8 @@ class FakeNjiaSalamaApi(
             latitude = request.latitude,
             longitude = request.longitude,
             type = request.type,
-            reportedBy = request.reportedBy
+            reportedBy = request.reportedBy,
+            imageUrl = request.imageUrl
         )
     }
 
@@ -64,9 +67,6 @@ class FakeNjiaSalamaApi(
     }
 }
 
-import org.junit.Rule
-import org.junit.rules.TemporaryFolder
-
 /**
  * Unit tests verifying that PinRepositoryImpl manages network connections safely.
  */
@@ -75,22 +75,6 @@ class PinRepositoryTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
 
-    private fun getFakeContext(): android.content.Context {
-        return object : android.test.mock.MockContext() {
-            override fun getCacheDir(): java.io.File {
-                val dir = java.io.File(tempFolder.root, "cache")
-                if (!dir.exists()) dir.mkdirs()
-                return dir
-            }
-            override fun getFilesDir(): java.io.File {
-                val dir = java.io.File(tempFolder.root, "files")
-                if (!dir.exists()) dir.mkdirs()
-                return dir
-            }
-            override fun getApplicationContext(): android.content.Context = this
-        }
-    }
-
     @Test
     fun testGetPinsReturnsSuccessResult() = runTest {
         // Arrange: Setup api mock to return success pins list
@@ -98,7 +82,7 @@ class PinRepositoryTest {
             DangerPin("1", "Pothole", "Deep pothole", -1.2925, 36.8225, HazardType.POTHOLE, "User1")
         )
         val apiDouble = FakeNjiaSalamaApi(shouldFail = false, responsePins = expectedPins)
-        val repository = PinRepositoryImpl(getFakeContext(), apiDouble)
+        val repository = PinRepositoryImpl(tempFolder.newFolder("cache"), apiDouble)
 
         // Act: Execute load calls
         val result = repository.getPins()
@@ -112,7 +96,7 @@ class PinRepositoryTest {
     fun testGetPinsReturnsFailureResultOnNetworkException() = runTest {
         // Arrange: Setup api mock to raise connectivity issues
         val apiDouble = FakeNjiaSalamaApi(shouldFail = true)
-        val repository = PinRepositoryImpl(getFakeContext(), apiDouble)
+        val repository = PinRepositoryImpl(tempFolder.newFolder("cache"), apiDouble)
 
         // Act: Execute calls
         val result = repository.getPins()
@@ -126,7 +110,7 @@ class PinRepositoryTest {
     fun testReportPinReturnsSuccessResult() = runTest {
         // Arrange: Setup api mock to save reports successfully
         val apiDouble = FakeNjiaSalamaApi(shouldFail = false)
-        val repository = PinRepositoryImpl(getFakeContext(), apiDouble)
+        val repository = PinRepositoryImpl(tempFolder.newFolder("cache"), apiDouble)
 
         // Act: Report road hazard pin
         val result = repository.reportPin(
