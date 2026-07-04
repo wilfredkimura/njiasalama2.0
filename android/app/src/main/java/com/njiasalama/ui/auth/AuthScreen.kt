@@ -20,6 +20,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -107,14 +109,7 @@ fun AuthScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF1E293B), // Premium Slate Dark Blue
-                        Color(0xFF0F172A)  // Very dark blue
-                    )
-                )
-            )
+            .background(MaterialTheme.colorScheme.background)
             .padding(24.dp)
     ) {
         Column(
@@ -129,112 +124,111 @@ fun AuthScreen(
                 text = "NjiaSalama",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF38BDF8), // Radiant Light Blue Accent
+                color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center
             )
             
             Text(
                 text = "Secure cycling route safety updates",
                 fontSize = 14.sp,
-                color = Color.LightGray,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 4.dp, bottom = 32.dp)
             )
 
             // Dynamic Form Card
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0x1FFFFFFF), RoundedCornerShape(16.dp)) // Glassmorphism-style overlay
-                    .padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Text(
-                    text = if (isSignUpMode) "Create Account" else "Welcome Back",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    modifier = Modifier.align(Alignment.Start)
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Name field only visible in Sign-Up mode
-                if (isSignUpMode) {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { viewModel.setName(it) },
-                        label = { Text("Full Name", color = Color.Gray) },
-                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color.Gray) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                // Email Input
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { viewModel.setEmail(it) },
-                    label = { Text("Email Address", color = Color.Gray) },
-                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = Color.Gray) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Password Input
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { viewModel.setPassword(it) },
-                    label = { Text("Password", color = Color.Gray) },
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Color.Gray) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Action buttons
-                Button(
-                    onClick = { viewModel.submit() },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF0284C7) // Sky blue color
-                    )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = if (isSignUpMode) "Sign Up" else "Log In",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
+                        text = if (isSignUpMode) "Create Account" else "Welcome Back",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.align(Alignment.Start)
                     )
-                }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (isSignUpMode) "Already have an account?" else "Don't have an account?",
-                        color = Color.LightGray,
-                        fontSize = 14.sp
-                    )
-                    TextButton(onClick = { viewModel.toggleAuthMode() }) {
-                        Text(
-                            text = if (isSignUpMode) "Log In" else "Sign Up",
-                            color = Color(0xFF38BDF8),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
+                    // Name field only visible in Sign-Up mode
+                    if (isSignUpMode) {
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { viewModel.setName(it) },
+                            label = { Text("Full Name") },
+                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    // Email Input
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { viewModel.setEmail(it) },
+                        label = { Text("Email Address") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Password Input
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { viewModel.setPassword(it) },
+                        label = { Text("Password") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Action buttons
+                    Button(
+                        onClick = { viewModel.submit() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = if (isSignUpMode) "Sign Up" else "Log In",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isSignUpMode) "Already have an account?" else "Don't have an account?",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp
+                        )
+                        TextButton(onClick = { viewModel.toggleAuthMode() }) {
+                            Text(
+                                text = if (isSignUpMode) "Log In" else "Sign Up",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -246,14 +240,14 @@ fun AuthScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Spacer(modifier = Modifier.weight(1f).height(1.dp).background(Color.DarkGray))
+                Spacer(modifier = Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
                 Text(
                     text = " OR ",
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 )
-                Spacer(modifier = Modifier.weight(1f).height(1.dp).background(Color.DarkGray))
+                Spacer(modifier = Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -261,23 +255,13 @@ fun AuthScreen(
             // Google login button
             OutlinedButton(
                 onClick = { onGoogleSignInClick() },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color.White
-                )
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    // Modern premium Google Sign-In Text
-                    Text(
-                        text = "Continue with Google",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                Text(
+                    text = "Continue with Google",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
 
@@ -286,28 +270,35 @@ fun AuthScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0x990F172A)), // Semi-transparent dark background
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = Color(0xFF38BDF8))
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         }
 
         // Error message feedback banner
         if (uiState is AuthUiState.Error) {
             val errorMsg = (uiState as AuthUiState.Error).message
-            Text(
-                text = errorMsg,
-                color = Color(0xFFEF4444), // Crimson Red
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFFEF2F2), RoundedCornerShape(8.dp))
-                    .padding(12.dp)
                     .align(Alignment.BottomCenter)
-            )
+            ) {
+                Text(
+                    text = errorMsg,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                )
+            }
         }
     }
 }
