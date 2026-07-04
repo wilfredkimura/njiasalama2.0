@@ -22,5 +22,6 @@ data class DangerPin(
     val latitude: Double,// Latitude coordinate of the pin
     val longitude: Double,// Longitude coordinate of the pin
     val type: HazardType,// Type of hazard (POTHOLE, UNLIT_STREET, DANGEROUS_TRAFFIC, OTHER)
-    val reportedBy: String// User ID of the person who reported the hazard
+    val reportedBy: String,// User ID of the person who reported the hazard
+    val imageUrl: String? = null // Optional hazard image URL (Base64 data URI or HTTP link)
 )

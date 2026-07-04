@@ -33,6 +33,7 @@ interface PinRepository {
         type: HazardType,
         latitude: Double,
         longitude: Double,
-        reportedBy: String
+        reportedBy: String,
+        imageUrl: String? = null
     ): Result<DangerPin>
 }

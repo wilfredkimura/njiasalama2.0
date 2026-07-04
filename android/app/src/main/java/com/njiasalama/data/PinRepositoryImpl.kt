@@ -31,7 +31,8 @@ class PinRepositoryImpl(
         type: HazardType,
         latitude: Double,
         longitude: Double,
-        reportedBy: String
+        reportedBy: String,
+        imageUrl: String?
     ): Result<DangerPin> = runCatching {
         val request = CreatePinRequest(
             title = title,
@@ -39,7 +40,8 @@ class PinRepositoryImpl(
             type = type,
             latitude = latitude,
             longitude = longitude,
-            reportedBy = reportedBy
+            reportedBy = reportedBy,
+            imageUrl = imageUrl
         )
         api.createPin("Bearer $token", request)
     }
