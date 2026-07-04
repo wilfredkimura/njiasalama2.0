@@ -33,7 +33,7 @@ object RetrofitClient {
      */
     fun getPinRepository(context: Context): PinRepositoryImpl {
         return _pinRepository ?: synchronized(this) {
-            _pinRepository ?: PinRepositoryImpl(context.applicationContext, api).also {
+            _pinRepository ?: PinRepositoryImpl(context.applicationContext.cacheDir, api).also {
                 _pinRepository = it
             }
         }

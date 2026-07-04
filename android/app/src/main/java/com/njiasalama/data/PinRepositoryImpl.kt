@@ -9,7 +9,7 @@ import com.njiasalama.domain.repository.PinRepository
  * Uses Kotlin's runCatching block to safely catch exceptions (such as timeouts or connection issues).
  */
 class PinRepositoryImpl(
-    private val context: android.content.Context,
+    private val cacheDir: java.io.File,
     private val api: NjiaSalamaApi
 ) : PinRepository {
 
@@ -18,7 +18,7 @@ class PinRepositoryImpl(
 
     private fun getCachedPins(): List<DangerPin> {
         return try {
-            val file = java.io.File(context.cacheDir, cacheFileName)
+            val file = java.io.File(cacheDir, cacheFileName)
             if (!file.exists()) return emptyList()
             val json = file.readText()
             val type = object : com.google.gson.reflect.TypeToken<List<DangerPin>>() {}.type
@@ -31,7 +31,7 @@ class PinRepositoryImpl(
 
     private fun cachePins(pins: List<DangerPin>) {
         try {
-            val file = java.io.File(context.cacheDir, cacheFileName)
+            val file = java.io.File(cacheDir, cacheFileName)
             val json = gson.toJson(pins)
             file.writeText(json)
         } catch (e: Exception) {
