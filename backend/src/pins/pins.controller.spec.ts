@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PinsController } from './pins.controller';
 import { PinsService } from './pins.service';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 describe('PinsController', () => {
   let controller: PinsController;
@@ -21,6 +23,18 @@ describe('PinsController', () => {
           provide: PinsService,
           useValue: mockPinsService,
         },
+        {
+          provide: JwtService,
+          useValue: {
+            verifyAsync: jest.fn().mockResolvedValue({ sub: 'user-id', email: 'test@example.com' }),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockReturnValue('secret'),
+          },
+        },
       ],
     }).compile();
 
@@ -33,19 +47,21 @@ describe('PinsController', () => {
   });
 
   describe('create', () => {
-    it('should invoke service.create and return the new pin details', async () => {
+    it('should invoke service.create and return the new pin details with reporter name', async () => {
       const dto = {
         title: 'Broken Streetlight',
         description: 'Dark corner',
         type: 'UNLIT_STREET' as const,
         latitude: -1.2910,
         longitude: 36.8200,
+        reportedBy: undefined as string | undefined,
       };
 
-      const result = await controller.create(dto);
+      const mockReq = { user: { name: 'Test Cyclist', email: 'test@example.com' } };
+      const result = await controller.create(dto, mockReq);
 
-      expect(service.create).toHaveBeenCalledWith(dto);
-      expect(result).toEqual({ id: 'uuid-123', ...dto });
+      expect(service.create).toHaveBeenCalledWith({ ...dto, reportedBy: 'Test Cyclist' });
+      expect(result).toEqual({ id: 'uuid-123', ...dto, reportedBy: 'Test Cyclist' });
     });
   });
 

@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Query, UsePipes, ValidationPipe, ParseFloatPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UsePipes, ValidationPipe, ParseFloatPipe, UseGuards, Request } from '@nestjs/common';
 import { PinsService } from './pins.service';
 import { CreatePinDto } from './dto/create-pin.dto';
 import { DangerPin } from './pins.entity';
+import { AuthGuard } from '../auth/auth.guard';
 
 /**
  * Controller layer exposing HTTP REST endpoints for client applications.
@@ -13,12 +14,18 @@ export class PinsController {
 
   /**
    * Endpoint: POST /pins
-   * Saves a new road hazard report.
+   * Saves a new road hazard report. Requires authentication.
    * Uses NestJS ValidationPipe to enforce the constraints declared in CreatePinDto.
    */
   @Post()
+  @UseGuards(AuthGuard)
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-  async create(@Body() createPinDto: CreatePinDto): Promise<DangerPin> {
+  async create(
+    @Body() createPinDto: CreatePinDto,
+    @Request() req: any,
+  ): Promise<DangerPin> {
+    // Associate the reported pin with the verified user name/email from the JWT payload
+    createPinDto.reportedBy = req.user.name || req.user.email || 'Authenticated User';
     return await this.pinsService.create(createPinDto);
   }
 
