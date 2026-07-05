@@ -67,14 +67,6 @@ android {
         compose = true
         buildConfig = true
     }
-
-    applicationVariants.all {
-        val variant = this
-        variant.outputs.all {
-            val output = this as com.android.build.gradle.api.BaseVariantOutput
-            output.outputFileName = "NjiaSalama-v${variant.versionName}.apk"
-        }
-    }
 }
 
 dependencies {
