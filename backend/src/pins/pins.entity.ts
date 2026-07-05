@@ -39,6 +39,10 @@ export class DangerPin {
   @Column({ name: 'reported_by', default: 'Anonymous' })
   reportedBy: string;
 
+  // Optional hazard image stored as a Base64 data URI string or URL
+  @Column({ name: 'image_url', nullable: true })
+  imageUrl?: string;
+
   // Automatically captures the timestamp when the row is first inserted
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

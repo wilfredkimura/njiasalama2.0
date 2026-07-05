@@ -55,6 +55,7 @@ describe('PinsController', () => {
         latitude: -1.2910,
         longitude: 36.8200,
         reportedBy: undefined as string | undefined,
+        imageUrl: 'data:image/jpeg;base64,mockdata',
       };
 
       const mockReq = { user: { name: 'Test Cyclist', email: 'test@example.com' } };

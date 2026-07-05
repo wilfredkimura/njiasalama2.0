@@ -23,13 +23,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Close
 import kotlinx.coroutines.launch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -44,10 +47,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,6 +72,8 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.njiasalama.data.LocationService
 import com.njiasalama.data.RetrofitClient // Import our networking client singleton container
+import com.njiasalama.domain.model.DangerPin
+import coil.compose.AsyncImage
 
 /**
  * The main UI layout for the application map.
@@ -81,12 +89,14 @@ fun MapScreen(
     viewModel: MapViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                // Initialize MapViewModel with LocationService, Retrofit PinRepository, SocketManager, and AuthRepository
+                val appContext = context.applicationContext
+                // Initialize MapViewModel with filesDir, LocationService, Retrofit PinRepository, SocketManager, and AuthRepository
                 MapViewModel(
-                    locationProvider = LocationService(context.applicationContext),
-                    pinRepository = RetrofitClient.pinRepository,
+                    filesDir = appContext.filesDir,
+                    locationProvider = LocationService(appContext),
+                    pinRepository = RetrofitClient.getPinRepository(appContext),
                     socketManager = RetrofitClient.socketManager,
-                    authRepository = RetrofitClient.getAuthRepository(context.applicationContext)
+                    authRepository = RetrofitClient.getAuthRepository(appContext)
                 )
             }
         }
@@ -107,7 +117,10 @@ fun MapScreen(
     var hasCenteredCamera by remember { mutableStateOf(false) }
 
     // Temporary state to hold coordinates of a map long-press gesture before showing the add pin dialog
-    var selectedLatLngForNewPin by remember { mutableStateOf<LatLng?>(null) }
+    var selectedLatLngForNewPin by rememberSaveable { mutableStateOf<LatLng?>(null) }
+
+    // State to hold currently selected pin for showing detailed bottom card
+    var selectedPin by remember { mutableStateOf<DangerPin?>(null) }
 
     val coroutineScope = rememberCoroutineScope()
     var radiusKm by remember { mutableStateOf(5.0f) }
@@ -211,6 +224,12 @@ fun MapScreen(
             
             // State 3: Data is ready. Render the Google Map.
             is MapUiState.Success -> {
+                // Reactive Zoom-based pin clustering
+                val currentZoom = cameraPositionState.position.zoom
+                val clusters = remember(state.pins, currentZoom) {
+                    clusterPins(state.pins, currentZoom)
+                }
+
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
                     cameraPositionState = cameraPositionState,
@@ -242,26 +261,47 @@ fun MapScreen(
                         )
                     }
 
-                    // Loop through every DangerPin in the list and draw a marker on the map
-                    state.pins.forEach { pin ->
-                        Marker(
-                            state = remember(pin.id) { MarkerState(position = LatLng(pin.latitude, pin.longitude)) },
-                            title = "${pin.type.name}: ${pin.title}", // e.g., "POTHOLE: Deep Pothole"
-                            snippet = pin.description,                 // Subtitle showing description
-                            onClick = { marker ->
-                                marker.showInfoWindow()
-                                val latDelta = 0.009
-                                val lngDelta = 0.009
-                                val bounds = LatLngBounds(
-                                    LatLng(pin.latitude - latDelta, pin.longitude - lngDelta),
-                                    LatLng(pin.latitude + latDelta, pin.longitude + lngDelta)
-                                )
-                                coroutineScope.launch {
-                                    cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(bounds, 0))
+                    // Render clustered markers or individual pins
+                    clusters.forEach { cluster ->
+                        if (cluster.pins.size == 1) {
+                            val pin = cluster.pins.first()
+                            Marker(
+                                state = remember(pin.id) { MarkerState(position = LatLng(pin.latitude, pin.longitude)) },
+                                title = "${pin.type.name}: ${pin.title}", // e.g., "POTHOLE: Deep Pothole"
+                                snippet = pin.description,                 // Subtitle showing description
+                                onClick = { marker ->
+                                    selectedPin = pin
+                                    marker.showInfoWindow()
+                                    val latDelta = 0.009
+                                    val lngDelta = 0.009
+                                    val bounds = LatLngBounds(
+                                        LatLng(pin.latitude - latDelta, pin.longitude - lngDelta),
+                                        LatLng(pin.latitude + latDelta, pin.longitude + lngDelta)
+                                    )
+                                    coroutineScope.launch {
+                                        cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(bounds, 0))
+                                    }
+                                    true
                                 }
-                                true
-                            }
-                        )
+                            )
+                        } else {
+                            Marker(
+                                state = remember(cluster.id) { MarkerState(position = cluster.center) },
+                                title = "${cluster.pins.size} Hazards Clustered",
+                                snippet = "Zoom in or click to expand",
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE),
+                                onClick = { marker ->
+                                    marker.showInfoWindow()
+                                    coroutineScope.launch {
+                                        val newZoom = cameraPositionState.position.zoom + 2f
+                                        cameraPositionState.animate(
+                                            CameraUpdateFactory.newLatLngZoom(cluster.center, newZoom)
+                                        )
+                                    }
+                                    true
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -273,14 +313,20 @@ fun MapScreen(
             AddPinDialog(
                 latLng = latLng,
                 onDismiss = { selectedLatLngForNewPin = null },
-                onSubmit = { title, description, type ->
-                    viewModel.addDangerPinLocally(
-                        title = title,
-                        description = description,
-                        latitude = latLng.latitude,
-                        longitude = latLng.longitude,
-                        type = type
-                    )
+                onSubmit = { title, description, type, imageUri ->
+                    coroutineScope.launch {
+                        val base64Image = imageUri?.let { uri ->
+                            com.njiasalama.data.ImageUtils.compressUriToBase64(context, uri)
+                        }
+                        viewModel.addDangerPinLocally(
+                            title = title,
+                            description = description,
+                            latitude = latLng.latitude,
+                            longitude = latLng.longitude,
+                            type = type,
+                            base64Image = base64Image
+                        )
+                    }
                     selectedLatLngForNewPin = null
                 }
             )
@@ -394,6 +440,7 @@ fun MapScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable {
+                                                    selectedPin = pin // Also select pin when list item clicked
                                                     // Zoom to hazard viewport
                                                     val latDelta = 0.009
                                                     val lngDelta = 0.009
@@ -511,6 +558,94 @@ fun MapScreen(
                 }
             )
         }
+
+        // Details panel for selected road hazard pin (MD3 compliant)
+        selectedPin?.let { pin ->
+            ElevatedCard(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 16.dp, vertical = 80.dp) // Adjusted offset to not overlap with FAB or maps UI
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = pin.title,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = pin.type.name.replace("_", " "),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        IconButton(onClick = { selectedPin = null }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close details"
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text(
+                        text = pin.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Reported by: ${pin.reportedBy}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                    }
+
+                    pin.imageUrl?.let { imgUrl ->
+                        if (imgUrl.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            AsyncImage(
+                                model = getCoilModel(imgUrl),
+                                contentDescription = "Hazard Picture",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(150.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -520,3 +655,82 @@ private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Do
     return results[0] / 1000f // Convert to km
 }
 
+private data class Cluster(
+    val id: String,
+    val center: LatLng,
+    val pins: List<DangerPin>
+)
+
+private fun clusterPins(pins: List<DangerPin>, zoom: Float): List<Cluster> {
+    if (pins.isEmpty()) return emptyList()
+    
+    // Zoom-dependent grid grouping threshold in coordinate degrees
+    val threshold = when {
+        zoom < 5f -> 4.0
+        zoom < 7f -> 2.0
+        zoom < 9f -> 0.8
+        zoom < 11f -> 0.25
+        zoom < 13f -> 0.05
+        else -> 0.0 // No clustering for zoom >= 13
+    }
+    
+    if (threshold == 0.0) {
+        return pins.map { pin ->
+            Cluster(
+                id = pin.id,
+                center = LatLng(pin.latitude, pin.longitude),
+                pins = listOf(pin)
+            )
+        }
+    }
+    
+    val clusters = mutableListOf<Cluster>()
+    
+    for (pin in pins) {
+        val pinLatLng = LatLng(pin.latitude, pin.longitude)
+        var matched = false
+        for (i in clusters.indices) {
+            val cluster = clusters[i]
+            val dLat = cluster.center.latitude - pinLatLng.latitude
+            val dLng = cluster.center.longitude - pinLatLng.longitude
+            val dist = Math.sqrt(dLat * dLat + dLng * dLng)
+            if (dist < threshold) {
+                val updatedPins = cluster.pins + pin
+                val avgLat = updatedPins.map { it.latitude }.average()
+                val avgLng = updatedPins.map { it.longitude }.average()
+                clusters[i] = Cluster(
+                    id = cluster.id,
+                    center = LatLng(avgLat, avgLng),
+                    pins = updatedPins
+                )
+                matched = true
+                break
+            }
+        }
+        if (!matched) {
+            clusters.add(
+                Cluster(
+                    id = pin.id,
+                    center = pinLatLng,
+                    pins = listOf(pin)
+                )
+            )
+        }
+    }
+    
+    return clusters
+}
+
+private fun getCoilModel(model: String?): Any? {
+    if (model == null) return null
+    if (model.startsWith("data:image/") && model.contains("base64,")) {
+        return try {
+            val base64Content = model.substringAfter("base64,")
+            android.util.Base64.decode(base64Content, android.util.Base64.DEFAULT)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            model
+        }
+    }
+    return model
+}

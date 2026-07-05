@@ -22,7 +22,8 @@ data class CreatePinRequest(
     val type: HazardType,
     val latitude: Double,
     val longitude: Double,
-    val reportedBy: String
+    val reportedBy: String,
+    val imageUrl: String? = null
 )
 
 /**

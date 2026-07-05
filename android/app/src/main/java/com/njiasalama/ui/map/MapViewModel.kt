@@ -20,11 +20,42 @@ import kotlinx.coroutines.launch // Importing the launch function to launch coro
  * We inject the LocationProvider, PinRepository, and SocketManager interfaces to support clean unit testing.
  */
 class MapViewModel(
+    private val filesDir: java.io.File,
     private val locationProvider: LocationProvider,
     private val pinRepository: PinRepository,
     private val socketManager: SocketManager,
     private val authRepository: AuthRepository
 ) : ViewModel() {
+
+    private val gson = com.google.gson.Gson()
+    private val offlineFileName = "offline_pins.json"
+
+    // Reads queued offline-reported hazards from local storage file
+    private fun getOfflinePins(): List<DangerPin> {
+        return try {
+            val file = java.io.File(filesDir, offlineFileName)
+            if (!file.exists()) return emptyList()
+            val json = file.readText()
+            val type = object : com.google.gson.reflect.TypeToken<List<DangerPin>>() {}.type
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    // Appends an offline hazard pin to the local file storage queue
+    private fun saveOfflinePin(pin: DangerPin) {
+        try {
+            val file = java.io.File(filesDir, offlineFileName)
+            val currentList = getOfflinePins()
+            val updatedList = currentList + pin
+            val json = gson.toJson(updatedList)
+            file.writeText(json)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     // Expose the logged-in cyclist's name for displaying on the Profile Icon overlay
     val currentUserName: String
@@ -65,18 +96,25 @@ class MapViewModel(
     /**
      * Fetches all road hazard pins from the database using our repository.
      * Updates uiState Flow to Success(pins) on success, or Error on connection failure.
+     * Combines retrieved pins with offline queued pins.
      */
     fun loadPins() {
         viewModelScope.launch {
             _uiState.value = MapUiState.Loading
             pinRepository.getPins()
                 .onSuccess { pinsList ->
-                    _uiState.value = MapUiState.Success(pinsList)
+                    val offlinePins = getOfflinePins()
+                    _uiState.value = MapUiState.Success(pinsList + offlinePins)
                 }
                 .onFailure { exception ->
-                    _uiState.value = MapUiState.Error(
-                        exception.message ?: "Failed to connect to the backend server"
-                    )
+                    val offlinePins = getOfflinePins()
+                    if (offlinePins.isNotEmpty()) {
+                        _uiState.value = MapUiState.Success(offlinePins)
+                    } else {
+                        _uiState.value = MapUiState.Error(
+                            exception.message ?: "Failed to connect to the backend server"
+                        )
+                    }
                 }
         }
     }
@@ -119,14 +157,15 @@ class MapViewModel(
 
     /**
      * Submits a new road hazard pin to the server repository.
-     * If the API call fails (e.g. offline), we fall back to displaying the pin locally.
+     * Compress photo as Base64. If API call fails, fall back to offline storage queue.
      */
     fun addDangerPinLocally(
         title: String,
         description: String,
         latitude: Double,
         longitude: Double,
-        type: HazardType
+        type: HazardType,
+        base64Image: String?
     ) {
         viewModelScope.launch {
             val token = authRepository.getToken() ?: ""
@@ -137,11 +176,11 @@ class MapViewModel(
                 latitude = latitude,
                 longitude = longitude,
                 type = type,
-                reportedBy = currentUserName
+                reportedBy = currentUserName,
+                imageUrl = base64Image
             ).onSuccess { newPin ->
                 val currentState = _uiState.value
                 if (currentState is MapUiState.Success) {
-                    // Update state flow with the returned persisted pin details
                     _uiState.value = MapUiState.Success(currentState.pins + newPin)
                 }
             }.onFailure {
@@ -155,8 +194,10 @@ class MapViewModel(
                         latitude = latitude,
                         longitude = longitude,
                         type = type,
-                        reportedBy = "$currentUserName (Offline)"
+                        reportedBy = "$currentUserName (Offline)",
+                        imageUrl = base64Image
                     )
+                    saveOfflinePin(localFallbackPin)
                     _uiState.value = MapUiState.Success(currentState.pins + localFallbackPin)
                 }
             }

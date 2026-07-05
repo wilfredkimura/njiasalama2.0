@@ -25,9 +25,18 @@ object RetrofitClient {
             .create(NjiaSalamaApi::class.java)
     }
 
-    // Lazily builds the PinRepository implementation mapping our API client
-    val pinRepository: PinRepositoryImpl by lazy {
-        PinRepositoryImpl(api)
+    // Cached singleton instance of the PinRepository
+    private var _pinRepository: PinRepositoryImpl? = null
+
+    /**
+     * Retrieves the global PinRepository instance, initializing it safely with context if not already built.
+     */
+    fun getPinRepository(context: Context): PinRepositoryImpl {
+        return _pinRepository ?: synchronized(this) {
+            _pinRepository ?: PinRepositoryImpl(context.applicationContext.cacheDir, api).also {
+                _pinRepository = it
+            }
+        }
     }
 
     // Lazily builds the SocketManager client mapping our WebSockets server connection
