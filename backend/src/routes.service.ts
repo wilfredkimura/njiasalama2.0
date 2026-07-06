@@ -156,8 +156,8 @@ export class RoutesService {
       // Keep start and endpoints locked, offset intermediate points
       if (idx === 0 || idx === baseRoute.points.length - 1) return p;
       return {
-        latitude: p.latitude + (idx % 2 === 0 ? 0.0015 : -0.0015),
-        longitude: p.longitude + (idx % 2 === 0 ? -0.0015 : 0.0015),
+        latitude: p.latitude + 0.0012,
+        longitude: p.longitude - 0.0012,
       };
     });
 
