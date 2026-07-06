@@ -65,6 +65,16 @@ class FakeNjiaSalamaApi(
         if (shouldFail) throw java.io.IOException("Auth server error")
         return AuthResponse("fake-jwt-token")
     }
+
+    override suspend fun getRoutes(
+        startLat: Double,
+        startLng: Double,
+        endLat: Double,
+        endLng: Double
+    ): List<com.njiasalama.domain.model.Route> {
+        if (shouldFail) throw java.io.IOException("Network connection timeout")
+        return emptyList()
+    }
 }
 
 /**

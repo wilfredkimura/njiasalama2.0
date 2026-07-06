@@ -91,6 +91,37 @@ class FakePinRepository : PinRepository {
         pins.add(newPin)
         return Result.success(newPin)
     }
+
+    override suspend fun getRoutes(
+        startLat: Double,
+        startLng: Double,
+        endLat: Double,
+        endLng: Double
+    ): Result<List<com.njiasalama.domain.model.Route>> {
+        val points = listOf(
+            com.njiasalama.domain.model.RoutePoint(startLat, startLng),
+            com.njiasalama.domain.model.RoutePoint(endLat, endLng)
+        )
+        val roadRoute = com.njiasalama.domain.model.Route(
+            id = "test-road-1",
+            name = "Road Route",
+            points = points,
+            surfaceType = com.njiasalama.domain.model.SurfaceType.ROAD,
+            distanceKm = 2.5,
+            dangerPins = emptyList()
+        )
+        val gravelRoute = com.njiasalama.domain.model.Route(
+            id = "test-gravel-1",
+            name = "Gravel Route",
+            points = points,
+            surfaceType = com.njiasalama.domain.model.SurfaceType.GRAVEL,
+            distanceKm = 3.0,
+            dangerPins = listOf(
+                DangerPin("1", "Pothole", "Pothole", startLat, startLng, HazardType.POTHOLE, "User1")
+            )
+        )
+        return Result.success(listOf(roadRoute, gravelRoute))
+    }
 }
 
 class FakeSocketManager : SocketManager {
@@ -286,13 +317,68 @@ class MapViewModelTest {
         liveFlow.emit(livePin)
         this.testScheduler.advanceUntilIdle()
         
-        // Assert: Confirm that the UI state has successfully updated to include the broadcasted pin
+        // Assert: Verify the state has successfully updated to include the broadcasted pin
         val updatedState = viewModel.uiState.value as MapUiState.Success
         assertEquals(3, updatedState.pins.size)
-        
+
         val addedPin = updatedState.pins.last()
         assertEquals("socket-pin-999", addedPin.id)
         assertEquals("Live Road Hazard", addedPin.title)
         assertEquals(HazardType.OTHER, addedPin.type)
+    }
+
+    @Test
+    fun testPlanningRouteRetrievesRoutesAndAppliesCriteriaFilters() = kotlinx.coroutines.test.runTest(testDispatcher) {
+        val viewModel = MapViewModel(tempFolder.newFolder("files"), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
+        this.testScheduler.advanceUntilIdle()
+
+        // Verify initial state is empty
+        assertEquals(null, viewModel.startPoint.value)
+        assertEquals(null, viewModel.endPoint.value)
+        assertTrue(viewModel.plannedRoutes.value.isEmpty())
+
+        // Act: Set Start and End points to trigger routing search
+        viewModel.setStartPoint(LatLng(1.0, 1.0))
+        viewModel.setEndPoint(LatLng(2.0, 2.0))
+        this.testScheduler.advanceUntilIdle()
+
+        // Assert: Verify routes are retrieved successfully
+        val routes = viewModel.plannedRoutes.value
+        assertEquals(2, routes.size)
+
+        // Road route has 0 hazards, gravel has 1
+        val road = routes.find { it.surfaceType == com.njiasalama.domain.model.SurfaceType.ROAD }!!
+        val gravel = routes.find { it.surfaceType == com.njiasalama.domain.model.SurfaceType.GRAVEL }!!
+        assertEquals(0, road.dangerPins.size)
+        assertEquals(1, gravel.dangerPins.size)
+
+        // Default selection should recommend the first route (road)
+        assertEquals(road.id, viewModel.selectedRoute.value?.id)
+        assertEquals(com.njiasalama.domain.model.RouteSafetyStatus.SAFE, viewModel.routeSafetyStatus.value)
+
+        // Act: Filter by surface criteria (GRAVEL)
+        viewModel.setSurfaceCriteria(com.njiasalama.domain.model.SurfaceType.GRAVEL)
+        this.testScheduler.advanceUntilIdle()
+
+        // Assert: Selected route updates to gravel, status updates to CAUTION
+        assertEquals(gravel.id, viewModel.selectedRoute.value?.id)
+        assertEquals(com.njiasalama.domain.model.RouteSafetyStatus.CAUTION, viewModel.routeSafetyStatus.value)
+
+        // Act: Clear criteria, set safetyCriteria to true (prefer safest)
+        viewModel.setSurfaceCriteria(null)
+        viewModel.setSafetyCriteria(true)
+        this.testScheduler.advanceUntilIdle()
+
+        // Assert: Recommends road route because it has 0 pins (safer than gravel with 1 pin)
+        assertEquals(road.id, viewModel.selectedRoute.value?.id)
+        assertEquals(com.njiasalama.domain.model.RouteSafetyStatus.SAFE, viewModel.routeSafetyStatus.value)
+
+        // Act: Clear route planning
+        viewModel.clearRoute()
+        assertEquals(null, viewModel.startPoint.value)
+        assertEquals(null, viewModel.endPoint.value)
+        assertTrue(viewModel.plannedRoutes.value.isEmpty())
+        assertEquals(null, viewModel.selectedRoute.value)
+        assertEquals(null, viewModel.routeSafetyStatus.value)
     }
 }
