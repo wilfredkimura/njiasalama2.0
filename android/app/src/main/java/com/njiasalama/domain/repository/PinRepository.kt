@@ -2,6 +2,7 @@ package com.njiasalama.domain.repository
 
 import com.njiasalama.domain.model.DangerPin
 import com.njiasalama.domain.model.HazardType
+import com.njiasalama.domain.model.Route
 
 /**
  * Interface defining the contract for database and network operations on road hazard pins.
@@ -36,4 +37,14 @@ interface PinRepository {
         reportedBy: String,
         imageUrl: String? = null
     ): Result<DangerPin>
+
+    /**
+     * Retrieves alternative route paths between start and end coordinates with hazard details.
+     */
+    suspend fun getRoutes(
+        startLat: Double,
+        startLng: Double,
+        endLat: Double,
+        endLng: Double
+    ): Result<List<Route>>
 }

@@ -3,6 +3,7 @@ package com.njiasalama.data
 import com.njiasalama.domain.model.DangerPin
 import com.njiasalama.domain.model.HazardType
 import com.njiasalama.domain.repository.PinRepository
+import com.njiasalama.domain.model.Route
 
 /**
  * Concrete implementation of PinRepository managing network data calls to the NjiaSalama API.
@@ -82,5 +83,14 @@ class PinRepositoryImpl(
             imageUrl = imageUrl
         )
         api.createPin("Bearer $token", request)
+    }
+
+    override suspend fun getRoutes(
+        startLat: Double,
+        startLng: Double,
+        endLat: Double,
+        endLng: Double
+    ): Result<List<Route>> = runCatching {
+        api.getRoutes(startLat, startLng, endLat, endLng)
     }
 }
