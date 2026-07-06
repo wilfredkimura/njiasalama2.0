@@ -37,6 +37,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,11 +72,16 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.njiasalama.data.LocationService
 import com.njiasalama.data.RetrofitClient // Import our networking client singleton container
 import com.njiasalama.domain.model.DangerPin
+import com.njiasalama.domain.model.Route
+import com.njiasalama.domain.model.SurfaceType
+import com.njiasalama.domain.model.RouteSafetyStatus
 import coil.compose.AsyncImage
+import androidx.compose.material.icons.filled.PlayArrow
 
 /**
  * The main UI layout for the application map.
@@ -109,6 +117,17 @@ fun MapScreen(
 
     // Observe the cyclist's current GPS location updates from the ViewModel
     val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
+
+    // Collect routing state flows from the ViewModel
+    val startPoint by viewModel.startPoint.collectAsStateWithLifecycle()
+    val endPoint by viewModel.endPoint.collectAsStateWithLifecycle()
+    val plannedRoutes by viewModel.plannedRoutes.collectAsStateWithLifecycle()
+    val selectedRoute by viewModel.selectedRoute.collectAsStateWithLifecycle()
+    val surfaceCriteria by viewModel.surfaceCriteria.collectAsStateWithLifecycle()
+    val safetyCriteria by viewModel.safetyCriteria.collectAsStateWithLifecycle()
+    val routeSafetyStatus by viewModel.routeSafetyStatus.collectAsStateWithLifecycle()
+
+    var isPlanningRouteMode by rememberSaveable { mutableStateOf(false) }
 
     // Track whether the user has granted location permission
     var permissionGranted by remember { mutableStateOf(false) }
@@ -198,6 +217,19 @@ fun MapScreen(
         }
     }
 
+    // Trigger safety Toast disclaimer when the selected route is fully clear of danger pins
+    LaunchedEffect(selectedRoute) {
+        selectedRoute?.let { route ->
+            if (route.dangerPins.isEmpty()) {
+                android.widget.Toast.makeText(
+                    context,
+                    "No danger pins reported. Please ride carefully as undocumented hazards may still exist.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
     // Configure properties of the map. 
     // We disable the default location layer to draw our own customizable azure location pin instead.
     val mapProperties = remember {
@@ -236,9 +268,56 @@ fun MapScreen(
                     properties = mapProperties,
                     // Intercept long press gestures on the map layout to capture coordinate positions
                     onMapLongClick = { latLng ->
-                        selectedLatLngForNewPin = latLng
+                        if (!isPlanningRouteMode) {
+                            selectedLatLngForNewPin = latLng
+                        }
+                    },
+                    onMapClick = { latLng ->
+                        if (isPlanningRouteMode) {
+                            if (startPoint == null) {
+                                viewModel.setStartPoint(latLng)
+                            } else if (endPoint == null) {
+                                viewModel.setEndPoint(latLng)
+                            } else {
+                                viewModel.clearRoute()
+                                viewModel.setStartPoint(latLng)
+                            }
+                        }
                     }
                 ) {
+                    // Render Route Planning Markers & Polylines
+                    startPoint?.let { start ->
+                        Marker(
+                            state = remember(start) { MarkerState(position = start) },
+                            title = "Start Point",
+                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
+                        )
+                    }
+
+                    endPoint?.let { end ->
+                        Marker(
+                            state = remember(end) { MarkerState(position = end) },
+                            title = "Destination",
+                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
+                        )
+                    }
+
+                    plannedRoutes.forEach { route ->
+                        val polylinePoints = remember(route.points) {
+                            route.points.map { LatLng(it.latitude, it.longitude) }
+                        }
+                        val isSelected = selectedRoute?.id == route.id
+                        Polyline(
+                            points = polylinePoints,
+                            color = if (isSelected) Color(0xFF0066FF) else Color.Gray.copy(alpha = 0.5f),
+                            width = if (isSelected) 8f else 5f,
+                            clickable = true,
+                            onClick = {
+                                viewModel.selectRoute(route)
+                            }
+                        )
+                    }
+
                     // Render custom Azure cyclist location marker
                     userLocation?.let { cyclistLoc ->
                         Marker(
@@ -476,12 +555,38 @@ fun MapScreen(
             }
         }
 
-        // Bottom Right Centering Floating Action Button
-        Box(
+        // Bottom Right Floating Action Buttons Column
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp)
+                .padding(bottom = if (isPlanningRouteMode) 220.dp else 100.dp, end = 16.dp), // Adjust vertical height if details panel is open
+            horizontalAlignment = Alignment.End
         ) {
+            // Route Planning FAB toggle
+            FloatingActionButton(
+                onClick = {
+                    isPlanningRouteMode = !isPlanningRouteMode
+                    if (!isPlanningRouteMode) {
+                        viewModel.clearRoute()
+                    }
+                },
+                containerColor = if (isPlanningRouteMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = if (isPlanningRouteMode) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer,
+                shape = androidx.compose.foundation.shape.CircleShape,
+                modifier = Modifier
+                    .size(48.dp)
+                    .padding(bottom = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Plan Route Mode Toggle",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Centering Location FAB
             FloatingActionButton(
                 onClick = {
                     userLocation?.let { location ->
@@ -559,88 +664,109 @@ fun MapScreen(
             )
         }
 
-        // Details panel for selected road hazard pin (MD3 compliant)
-        selectedPin?.let { pin ->
-            ElevatedCard(
+        // Details panel for selected road hazard pin or active Route Planner details (MD3 compliant)
+        if (isPlanningRouteMode) {
+            RoutePlannerPanel(
+                startPoint = startPoint,
+                endPoint = endPoint,
+                plannedRoutes = plannedRoutes,
+                selectedRoute = selectedRoute,
+                surfaceCriteria = surfaceCriteria,
+                safetyCriteria = safetyCriteria,
+                safetyStatus = routeSafetyStatus,
+                onSurfaceCriteriaSelected = { type -> viewModel.setSurfaceCriteria(type) },
+                onSafetyCriteriaToggled = { enabled -> viewModel.setSafetyCriteria(enabled) },
+                onCloseClick = {
+                    isPlanningRouteMode = false
+                    viewModel.clearRoute()
+                },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 16.dp, vertical = 80.dp) // Adjusted offset to not overlap with FAB or maps UI
-                    .fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = pin.title,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = pin.type.name.replace("_", " "),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            )
+        } else {
+            selectedPin?.let { pin ->
+                ElevatedCard(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 16.dp, vertical = 80.dp) // Adjusted offset to not overlap with FAB or maps UI
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = pin.title,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = pin.type.name.replace("_", " "),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            IconButton(onClick = { selectedPin = null }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close details"
+                                )
+                            }
                         }
-                        IconButton(onClick = { selectedPin = null }) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Close details"
-                            )
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text(
-                        text = pin.description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
                         Text(
-                            text = "Reported by: ${pin.reportedBy}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            text = pin.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis
                         )
-                    }
-
-                    pin.imageUrl?.let { imgUrl ->
-                        if (imgUrl.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            AsyncImage(
-                                model = getCoilModel(imgUrl),
-                                contentDescription = "Hazard Picture",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(150.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
-                                contentScale = ContentScale.Crop
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
                             )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Reported by: ${pin.reportedBy}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            )
+                        }
+
+                        pin.imageUrl?.let { imgUrl ->
+                            if (imgUrl.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                AsyncImage(
+                                    model = getCoilModel(imgUrl),
+                                    contentDescription = "Hazard Picture",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(150.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
                         }
                     }
                 }
@@ -653,6 +779,234 @@ private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Do
     val results = FloatArray(1)
     android.location.Location.distanceBetween(lat1, lon1, lat2, lon2, results)
     return results[0] / 1000f // Convert to km
+}
+
+@Composable
+fun RoutePlannerPanel(
+    startPoint: LatLng?,
+    endPoint: LatLng?,
+    plannedRoutes: List<Route>,
+    selectedRoute: Route?,
+    surfaceCriteria: SurfaceType?,
+    safetyCriteria: Boolean,
+    safetyStatus: RouteSafetyStatus?,
+    onSurfaceCriteriaSelected: (SurfaceType?) -> Unit,
+    onSafetyCriteriaToggled: (Boolean) -> Unit,
+    onCloseClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ElevatedCard(
+        modifier = modifier
+            .fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+        ) {
+            // Header Row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Route Planner",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onCloseClick) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close Route Planner"
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Start/Destination Status
+            if (startPoint == null) {
+                Text(
+                    text = "📍 Tap anywhere on the map to set Start Point",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else if (endPoint == null) {
+                Text(
+                    text = "🏁 Tap on the map to set Destination",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    text = "Route Planned Successfully",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                selectedRoute?.let { route ->
+                    Text(
+                        text = "Selected: ${route.name} (${route.distanceKm} km)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            if (startPoint != null && endPoint != null && plannedRoutes.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Criteria selection title
+                Text(
+                    text = "Filter Criteria",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Selection Buttons (Stable Custom Chips)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Road Surface Button
+                    val roadSelected = surfaceCriteria == SurfaceType.ROAD
+                    Button(
+                        onClick = {
+                            if (roadSelected) onSurfaceCriteriaSelected(null)
+                            else onSurfaceCriteriaSelected(SurfaceType.ROAD)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (roadSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            contentColor = if (roadSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        border = if (roadSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text("Paved Road", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    // Gravel Surface Button
+                    val gravelSelected = surfaceCriteria == SurfaceType.GRAVEL
+                    Button(
+                        onClick = {
+                            if (gravelSelected) onSurfaceCriteriaSelected(null)
+                            else onSurfaceCriteriaSelected(SurfaceType.GRAVEL)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (gravelSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            contentColor = if (gravelSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        border = if (gravelSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text("Gravel Trail", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    // Safest Route Button
+                    Button(
+                        onClick = { onSafetyCriteriaToggled(!safetyCriteria) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (safetyCriteria) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            contentColor = if (safetyCriteria) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        border = if (safetyCriteria) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                    ) {
+                        Text("Safest", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Route safety status notification
+                selectedRoute?.let { route ->
+                    when (safetyStatus) {
+                        RouteSafetyStatus.SAFE -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFE8F5E9)) // Soft green success color
+                                    .border(1.dp, Color(0xFFC8E6C9), RoundedCornerShape(8.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Text(
+                                    text = "✅ This route has no reported danger pins. Enjoy your ride!",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF2E7D32)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Please ride carefully as undocumented hazards may still exist.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF388E3C)
+                                )
+                            }
+                        }
+                        RouteSafetyStatus.CAUTION -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFFF9C4)) // Soft yellow caution color
+                                    .border(1.dp, Color(0xFFFFF59D), RoundedCornerShape(8.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Text(
+                                    text = "⚠️ Caution: Route contains ${route.dangerPins.size} hazard(s).",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFF57F17)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Look out for: " + route.dangerPins.map { it.title }.joinToString(", "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = Color(0xFFE65100)
+                                )
+                            }
+                        }
+                        RouteSafetyStatus.DANGEROUS -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFFEBEE)) // Soft red dangerous color
+                                    .border(1.dp, Color(0xFFFFCDD2), RoundedCornerShape(8.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Text(
+                                    text = "🚨 Warning: High hazard density (${route.dangerPins.size} pins).",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFC62828)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Consider choosing an alternative route or use extreme caution.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFD32F2F)
+                                )
+                            }
+                        }
+                        null -> {}
+                    }
+                }
+            }
+        }
+    }
 }
 
 private data class Cluster(
