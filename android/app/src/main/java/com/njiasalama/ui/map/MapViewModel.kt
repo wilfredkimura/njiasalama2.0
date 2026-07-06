@@ -87,6 +87,31 @@ class MapViewModel(
      */
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
+    // --- Start of Routing State Properties ---
+
+    private val _startPoint = MutableStateFlow<LatLng?>(null)
+    val startPoint: StateFlow<LatLng?> = _startPoint.asStateFlow()
+
+    private val _endPoint = MutableStateFlow<LatLng?>(null)
+    val endPoint: StateFlow<LatLng?> = _endPoint.asStateFlow()
+
+    private val _plannedRoutes = MutableStateFlow<List<com.njiasalama.domain.model.Route>>(emptyList())
+    val plannedRoutes: StateFlow<List<com.njiasalama.domain.model.Route>> = _plannedRoutes.asStateFlow()
+
+    private val _selectedRoute = MutableStateFlow<com.njiasalama.domain.model.Route?>(null)
+    val selectedRoute: StateFlow<com.njiasalama.domain.model.Route?> = _selectedRoute.asStateFlow()
+
+    private val _surfaceCriteria = MutableStateFlow<com.njiasalama.domain.model.SurfaceType?>(null)
+    val surfaceCriteria: StateFlow<com.njiasalama.domain.model.SurfaceType?> = _surfaceCriteria.asStateFlow()
+
+    private val _safetyCriteria = MutableStateFlow<Boolean>(false)
+    val safetyCriteria: StateFlow<Boolean> = _safetyCriteria.asStateFlow()
+
+    private val _routeSafetyStatus = MutableStateFlow<com.njiasalama.domain.model.RouteSafetyStatus?>(null)
+    val routeSafetyStatus: StateFlow<com.njiasalama.domain.model.RouteSafetyStatus?> = _routeSafetyStatus.asStateFlow()
+
+    // --- End of Routing State Properties ---
+
     // Constructor block executed automatically as soon as the ViewModel is initialized
     init {
         loadPins()
@@ -200,6 +225,105 @@ class MapViewModel(
                     saveOfflinePin(localFallbackPin)
                     _uiState.value = MapUiState.Success(currentState.pins + localFallbackPin)
                 }
+            }
+        }
+    }
+
+    fun setStartPoint(latLng: LatLng?) {
+        _startPoint.value = latLng
+        triggerRouteSearch()
+    }
+
+    fun setEndPoint(latLng: LatLng?) {
+        _endPoint.value = latLng
+        triggerRouteSearch()
+    }
+
+    fun setSurfaceCriteria(type: com.njiasalama.domain.model.SurfaceType?) {
+        _surfaceCriteria.value = type
+        updateSelectedRoute()
+    }
+
+    fun setSafetyCriteria(enabled: Boolean) {
+        _safetyCriteria.value = enabled
+        updateSelectedRoute()
+    }
+
+    fun selectRoute(route: com.njiasalama.domain.model.Route) {
+        _selectedRoute.value = route
+        _routeSafetyStatus.value = when {
+            route.dangerPins.isEmpty() -> com.njiasalama.domain.model.RouteSafetyStatus.SAFE
+            route.dangerPins.size <= 3 -> com.njiasalama.domain.model.RouteSafetyStatus.CAUTION
+            else -> com.njiasalama.domain.model.RouteSafetyStatus.DANGEROUS
+        }
+    }
+
+    fun clearRoute() {
+        _startPoint.value = null
+        _endPoint.value = null
+        _plannedRoutes.value = emptyList()
+        _selectedRoute.value = null
+        _surfaceCriteria.value = null
+        _safetyCriteria.value = false
+        _routeSafetyStatus.value = null
+    }
+
+    private fun triggerRouteSearch() {
+        val start = _startPoint.value
+        val end = _endPoint.value
+        if (start != null && end != null) {
+            viewModelScope.launch {
+                pinRepository.getRoutes(
+                    startLat = start.latitude,
+                    startLng = start.longitude,
+                    endLat = end.latitude,
+                    endLng = end.longitude
+                ).onSuccess { routes ->
+                    _plannedRoutes.value = routes
+                    updateSelectedRoute()
+                }.onFailure {
+                    _plannedRoutes.value = emptyList()
+                    _selectedRoute.value = null
+                    _routeSafetyStatus.value = null
+                }
+            }
+        } else {
+            _plannedRoutes.value = emptyList()
+            _selectedRoute.value = null
+            _routeSafetyStatus.value = null
+        }
+    }
+
+    private fun getRecommendedRoute(): com.njiasalama.domain.model.Route? {
+        val routes = _plannedRoutes.value
+        if (routes.isEmpty()) return null
+
+        val surfacePref = _surfaceCriteria.value
+        val preferSafest = _safetyCriteria.value
+
+        val filteredRoutes = if (surfacePref != null) {
+            routes.filter { it.surfaceType == surfacePref }
+        } else {
+            routes
+        }
+
+        val candidates = if (filteredRoutes.isEmpty()) routes else filteredRoutes
+
+        return if (preferSafest) {
+            candidates.minByOrNull { it.dangerPins.size }
+        } else {
+            candidates.firstOrNull()
+        }
+    }
+
+    private fun updateSelectedRoute() {
+        val recommended = getRecommendedRoute()
+        _selectedRoute.value = recommended
+        _routeSafetyStatus.value = recommended?.let { route ->
+            when {
+                route.dangerPins.isEmpty() -> com.njiasalama.domain.model.RouteSafetyStatus.SAFE
+                route.dangerPins.size <= 3 -> com.njiasalama.domain.model.RouteSafetyStatus.CAUTION
+                else -> com.njiasalama.domain.model.RouteSafetyStatus.DANGEROUS
             }
         }
     }
