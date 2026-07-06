@@ -6,6 +6,7 @@ import com.njiasalama.domain.model.AuthResponse
 import com.njiasalama.domain.model.GoogleAuthRequest
 import com.njiasalama.domain.model.LoginRequest
 import com.njiasalama.domain.model.SignUpRequest
+import com.njiasalama.domain.model.Route
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
@@ -38,6 +39,18 @@ interface NjiaSalamaApi {
      */
     @GET("pins")
     suspend fun getPins(): List<DangerPin>
+
+    /**
+     * Maps to: GET /routes
+     * Fetches alternative route lines between point A and point B, complete with hazard overlaps and surface types.
+     */
+    @GET("routes")
+    suspend fun getRoutes(
+        @Query("startLat") startLat: Double,
+        @Query("startLng") startLng: Double,
+        @Query("endLat") endLat: Double,
+        @Query("endLng") endLng: Double
+    ): List<Route>
 
     /**
      * Maps to: GET /pins/nearby
