@@ -29,13 +29,22 @@ export class RoutesService {
 
     if (apiKey && apiKey.trim().length > 0) {
       try {
-        routes = await this.fetchFromOpenRouteService(
-          apiKey,
-          startLat,
-          startLng,
-          endLat,
-          endLng,
-        );
+        const results = await Promise.allSettled([
+          this.fetchFromOpenRouteService(apiKey, 'driving-car', startLat, startLng, endLat, endLng),
+          this.fetchFromOpenRouteService(apiKey, 'cycling-regular', startLat, startLng, endLat, endLng),
+        ]);
+
+        for (const res of results) {
+          if (res.status === 'fulfilled') {
+            routes.push(...res.value);
+          } else {
+            this.logger.error(`Error fetching profile from OpenRouteService: ${res.reason}`);
+          }
+        }
+
+        if (routes.length === 0) {
+          throw new Error('No routes returned from any profile');
+        }
       } catch (error) {
         this.logger.error(
           `Failed to fetch routes from OpenRouteService: ${error.message}. Falling back to simulation.`,
@@ -61,12 +70,13 @@ export class RoutesService {
    */
   private async fetchFromOpenRouteService(
     apiKey: string,
+    profile: string,
     startLat: number,
     startLng: number,
     endLat: number,
     endLng: number,
   ): Promise<Route[]> {
-    const url = 'https://api.openrouteservice.org/v2/directions/cycling-regular/geojson';
+    const url = `https://api.openrouteservice.org/v2/directions/${profile}/geojson`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -86,7 +96,7 @@ export class RoutesService {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenRouteService responded with status code ${response.status}`);
+      throw new Error(`OpenRouteService responded with status code ${response.status} for profile ${profile}`);
     }
 
     const geojson: any = await response.json();
@@ -122,8 +132,10 @@ export class RoutesService {
         : SurfaceType.ROAD;
 
       routes.push({
-        id: `ors-route-${index}-${Date.now()}`,
-        name: index === 0 ? 'Primary Cycling Route' : `Alternative Route ${index}`,
+        id: `ors-route-${profile}-${index}-${Date.now()}`,
+        name: profile === 'driving-car'
+          ? (index === 0 ? 'Direct Street Route' : `Alternative Street Route ${index}`)
+          : (index === 0 ? 'Scenic Cycle/Gravel Route' : `Alternative Scenic Route ${index}`),
         points,
         surfaceType,
         distanceKm,
@@ -131,44 +143,7 @@ export class RoutesService {
       });
     }
 
-    // Ensure we always provide at least one ROAD and one GRAVEL option by copying and adapting if needed
-    if (routes.length === 1) {
-      routes.push(this.createAlternativeOption(routes[0]));
-    } else if (routes.length > 1) {
-      const hasRoad = routes.some(r => r.surfaceType === SurfaceType.ROAD);
-      const hasGravel = routes.some(r => r.surfaceType === SurfaceType.GRAVEL);
-      if (!hasRoad) {
-        routes.push(this.createAlternativeOption(routes[0], SurfaceType.ROAD));
-      } else if (!hasGravel) {
-        routes.push(this.createAlternativeOption(routes[0], SurfaceType.GRAVEL));
-      }
-    }
-
     return routes;
-  }
-
-  /**
-   * Helper that copies a route and offsets its points slightly to simulate a surface alternative.
-   */
-  private createAlternativeOption(baseRoute: Route, forceType?: SurfaceType): Route {
-    const targetType = forceType || (baseRoute.surfaceType === SurfaceType.ROAD ? SurfaceType.GRAVEL : SurfaceType.ROAD);
-    const offsetPoints = baseRoute.points.map((p, idx) => {
-      // Keep start and endpoints locked, offset intermediate points
-      if (idx === 0 || idx === baseRoute.points.length - 1) return p;
-      return {
-        latitude: p.latitude + 0.0012,
-        longitude: p.longitude - 0.0012,
-      };
-    });
-
-    return {
-      id: `${baseRoute.id}-alt-surface`,
-      name: targetType === SurfaceType.GRAVEL ? 'Scenic Gravel Trail' : 'Direct Street Route',
-      points: offsetPoints,
-      surfaceType: targetType,
-      distanceKm: Number((baseRoute.distanceKm * 1.15).toFixed(2)),
-      dangerPins: [],
-    };
   }
 
   /**
