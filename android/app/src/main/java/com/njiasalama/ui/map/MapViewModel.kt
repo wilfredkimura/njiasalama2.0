@@ -420,7 +420,7 @@ class MapViewModel(
         val end = _endPoint.value ?: return
 
         viewModelScope.launch {
-            val token = authRepository.getAuthToken() ?: ""
+            val token = authRepository.getToken() ?: ""
             pinRepository.saveRoute(
                 token = token,
                 name = routeName,
@@ -442,7 +442,7 @@ class MapViewModel(
 
     fun loadSavedRoutes() {
         viewModelScope.launch {
-            val token = authRepository.getAuthToken() ?: ""
+            val token = authRepository.getToken() ?: ""
             pinRepository.getSavedRoutes(token)
                 .onSuccess { routes ->
                     _savedRoutes.value = routes
@@ -455,7 +455,7 @@ class MapViewModel(
 
     fun deleteSavedRoute(routeId: String) {
         viewModelScope.launch {
-            val token = authRepository.getAuthToken() ?: ""
+            val token = authRepository.getToken() ?: ""
             pinRepository.deleteSavedRoute(token, routeId)
                 .onSuccess {
                     loadSavedRoutes()
