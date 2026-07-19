@@ -7,11 +7,15 @@ import com.njiasalama.domain.model.GoogleAuthRequest
 import com.njiasalama.domain.model.LoginRequest
 import com.njiasalama.domain.model.SignUpRequest
 import com.njiasalama.domain.model.Route
+import com.njiasalama.domain.model.SavedRoute
+import com.njiasalama.domain.model.GeocodeLocation
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.DELETE
 import retrofit2.http.Query
+import retrofit2.http.Path
 
 /**
  * Data class representing the JSON payload sent when reporting a new hazard.
@@ -25,6 +29,17 @@ data class CreatePinRequest(
     val longitude: Double,
     val reportedBy: String,
     val imageUrl: String? = null
+)
+
+data class SavedRouteRequest(
+    val name: String,
+    val startLat: Double,
+    val startLng: Double,
+    val endLat: Double,
+    val endLng: Double,
+    val points: List<com.njiasalama.domain.model.RoutePoint>,
+    val surfaceType: com.njiasalama.domain.model.SurfaceType,
+    val distanceKm: Double
 )
 
 /**
@@ -49,8 +64,31 @@ interface NjiaSalamaApi {
         @Query("startLat") startLat: Double,
         @Query("startLng") startLng: Double,
         @Query("endLat") endLat: Double,
-        @Query("endLng") endLng: Double
+        @Query("endLng") endLng: Double,
+        @Query("waypoints") waypoints: String? = null
     ): List<Route>
+
+    @GET("routes/geocode")
+    suspend fun geocode(
+        @Query("query") query: String
+    ): List<GeocodeLocation>
+
+    @POST("routes/save")
+    suspend fun saveRoute(
+        @Header("Authorization") token: String,
+        @Body request: SavedRouteRequest
+    ): SavedRoute
+
+    @GET("routes/saved")
+    suspend fun getSavedRoutes(
+        @Header("Authorization") token: String
+    ): List<SavedRoute>
+
+    @DELETE("routes/saved/{id}")
+    suspend fun deleteSavedRoute(
+        @Header("Authorization") token: String,
+        @Path("id") id: String
+    ): Map<String, Boolean>
 
     /**
      * Maps to: GET /pins/nearby
