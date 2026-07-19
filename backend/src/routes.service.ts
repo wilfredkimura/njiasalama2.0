@@ -23,6 +23,7 @@ export class RoutesService {
     startLng: number,
     endLat: number,
     endLng: number,
+    waypoints?: string,
   ): Promise<Route[]> {
     const apiKey = this.configService.get<string>('ORS_API_KEY');
     let routes: Route[] = [];
@@ -30,8 +31,8 @@ export class RoutesService {
     if (apiKey && apiKey.trim().length > 0) {
       try {
         const results = await Promise.allSettled([
-          this.fetchFromOpenRouteService(apiKey, 'driving-car', startLat, startLng, endLat, endLng),
-          this.fetchFromOpenRouteService(apiKey, 'cycling-regular', startLat, startLng, endLat, endLng),
+          this.fetchFromOpenRouteService(apiKey, 'driving-car', startLat, startLng, endLat, endLng, waypoints),
+          this.fetchFromOpenRouteService(apiKey, 'cycling-regular', startLat, startLng, endLat, endLng, waypoints),
         ]);
 
         for (const res of results) {
@@ -49,11 +50,11 @@ export class RoutesService {
         this.logger.error(
           `Failed to fetch routes from OpenRouteService: ${error.message}. Falling back to simulation.`,
         );
-        routes = this.generateSimulatedRoutes(startLat, startLng, endLat, endLng);
+        routes = this.generateSimulatedRoutes(startLat, startLng, endLat, endLng, waypoints);
       }
     } else {
       this.logger.warn('ORS_API_KEY is not configured in .env file. Using simulated routes.');
-      routes = this.generateSimulatedRoutes(startLat, startLng, endLat, endLng);
+      routes = this.generateSimulatedRoutes(startLat, startLng, endLat, endLng, waypoints);
     }
 
     // Associate all danger pins from the database that are within 100m of each route
@@ -75,8 +76,27 @@ export class RoutesService {
     startLng: number,
     endLat: number,
     endLng: number,
+    waypoints?: string,
   ): Promise<Route[]> {
     const url = `https://api.openrouteservice.org/v2/directions/${profile}/geojson`;
+    
+    // Construct coordinates array including optional waypoints
+    const coords: [number, number][] = [[startLng, startLat]];
+    if (waypoints && waypoints.trim().length > 0) {
+      const pts = waypoints.split(/[|;]/);
+      for (const pt of pts) {
+        const parts = pt.split(',');
+        if (parts.length === 2) {
+          const lat = parseFloat(parts[0]);
+          const lng = parseFloat(parts[1]);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            coords.push([lng, lat]);
+          }
+        }
+      }
+    }
+    coords.push([endLng, endLat]);
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -84,10 +104,7 @@ export class RoutesService {
         'Authorization': apiKey,
       },
       body: JSON.stringify({
-        coordinates: [
-          [startLng, startLat], // GeoJSON expects [longitude, latitude]
-          [endLng, endLat],
-        ],
+        coordinates: coords,
         extra_info: ['surface'],
         alternative_routes: {
           target_count: 2,
@@ -154,6 +171,7 @@ export class RoutesService {
     startLng: number,
     endLat: number,
     endLng: number,
+    waypoints?: string,
   ): Route[] {
     const directPoints: RoutePoint[] = this.interpolatePoints(
       startLat,

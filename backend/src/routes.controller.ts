@@ -12,6 +12,7 @@ export class RoutesController {
     @Query('startLng') startLng: string,
     @Query('endLat') endLat: string,
     @Query('endLng') endLng: string,
+    @Query('waypoints') waypoints?: string,
   ): Promise<Route[]> {
     const sLat = parseFloat(startLat);
     const sLng = parseFloat(startLng);
@@ -24,7 +25,7 @@ export class RoutesController {
       );
     }
 
-    return await this.routesService.findRoutes(sLat, sLng, eLat, eLng);
+    return await this.routesService.findRoutes(sLat, sLng, eLat, eLng, waypoints);
   }
 
   @Get('geocode')
