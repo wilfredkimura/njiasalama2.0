@@ -102,19 +102,25 @@ export class RoutesService {
     }
     coords.push([endLng, endLat]);
 
+    const requestBody: any = {
+      coordinates: coords,
+      extra_info: ['surface'],
+    };
+
+    // OpenRouteService only supports alternative routes for simple point-to-point queries (exactly 2 coordinates)
+    if (coords.length === 2) {
+      requestBody.alternative_routes = {
+        target_count: 2,
+      };
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': apiKey,
       },
-      body: JSON.stringify({
-        coordinates: coords,
-        extra_info: ['surface'],
-        alternative_routes: {
-          target_count: 2,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
