@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { PinsService } from './pins/pins.service';
 import { Route, RoutePoint, SurfaceType, GeocodeLocation } from './route.interface';
 import { DangerPin } from './pins/pins.entity';
+import { SavedRoute } from './routes/saved-route.entity';
 
 @Injectable()
 export class RoutesService {
@@ -11,6 +14,8 @@ export class RoutesService {
   constructor(
     private readonly configService: ConfigService,
     private readonly pinsService: PinsService,
+    @InjectRepository(SavedRoute)
+    private readonly savedRouteRepository: Repository<SavedRoute>,
   ) {}
 
   /**
@@ -374,5 +379,57 @@ export class RoutesService {
         { name: `${query} (Simulated Fallback 2)`, latitude: -1.3000, longitude: 36.8500 },
       ];
     }
+  }
+
+  /**
+   * Saves a route polyline along with start/end details and metadata to the database.
+   */
+  async saveRoute(
+    userId: string,
+    name: string,
+    startLat: number,
+    startLng: number,
+    endLat: number,
+    endLng: number,
+    points: RoutePoint[],
+    surfaceType: SurfaceType,
+    distanceKm: number,
+  ): Promise<SavedRoute> {
+    const savedRoute = this.savedRouteRepository.create({
+      userId,
+      name,
+      startLat,
+      startLng,
+      endLat,
+      endLng,
+      points,
+      surfaceType,
+      distanceKm,
+    });
+    return await this.savedRouteRepository.save(savedRoute);
+  }
+
+  /**
+   * Fetches the complete list of saved routes for a given user.
+   */
+  async getSavedRoutes(userId: string): Promise<SavedRoute[]> {
+    return await this.savedRouteRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Deletes a saved route from the database.
+   * Ensures the route belongs to the user requesting deletion.
+   */
+  async deleteSavedRoute(userId: string, routeId: string): Promise<void> {
+    const route = await this.savedRouteRepository.findOne({
+      where: { id: routeId, userId },
+    });
+    if (!route) {
+      throw new Error('Saved route not found or access denied');
+    }
+    await this.savedRouteRepository.remove(route);
   }
 }
