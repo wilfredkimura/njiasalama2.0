@@ -18,3 +18,9 @@ export interface Route {
   distanceKm: number;
   dangerPins: DangerPin[];
 }
+
+export interface GeocodeLocation {
+  name: string;
+  latitude: number;
+  longitude: number;
+}

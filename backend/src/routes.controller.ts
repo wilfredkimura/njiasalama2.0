@@ -1,6 +1,6 @@
 import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
 import { RoutesService } from './routes.service';
-import { Route } from './route.interface';
+import { Route, GeocodeLocation } from './route.interface';
 
 @Controller('routes')
 export class RoutesController {
@@ -25,5 +25,13 @@ export class RoutesController {
     }
 
     return await this.routesService.findRoutes(sLat, sLng, eLat, eLng);
+  }
+
+  @Get('geocode')
+  async searchLocations(@Query('query') query: string): Promise<GeocodeLocation[]> {
+    if (!query || query.trim().length === 0) {
+      throw new BadRequestException('Search query string is required.');
+    }
+    return await this.routesService.searchLocations(query);
   }
 }
