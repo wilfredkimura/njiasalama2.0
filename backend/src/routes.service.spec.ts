@@ -1,9 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { RoutesService } from './routes.service';
 import { PinsService } from './pins/pins.service';
 import { SurfaceType } from './route.interface';
 import { DangerPin } from './pins/pins.entity';
+import { SavedRoute } from './routes/saved-route.entity';
 
 describe('RoutesService', () => {
   let service: RoutesService;
@@ -32,6 +34,8 @@ describe('RoutesService', () => {
     global.fetch = originalFetch;
   });
 
+  let mockSavedRouteRepository: any;
+
   beforeEach(async () => {
     mockPinsService = {
       findAll: jest.fn().mockResolvedValue(fakePins),
@@ -39,12 +43,20 @@ describe('RoutesService', () => {
     mockConfigService = {
       get: jest.fn().mockReturnValue(''), // Return empty ORS API key to trigger simulation fallback by default
     };
+    mockSavedRouteRepository = {
+      create: jest.fn().mockImplementation(dto => dto),
+      save: jest.fn().mockImplementation(entity => Promise.resolve({ id: 'saved-route-id-123', ...entity })),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      remove: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RoutesService,
         { provide: ConfigService, useValue: mockConfigService },
         { provide: PinsService, useValue: mockPinsService },
+        { provide: getRepositoryToken(SavedRoute), useValue: mockSavedRouteRepository },
       ],
     }).compile();
 
@@ -184,6 +196,68 @@ describe('RoutesService', () => {
 
       expect(routes).toHaveLength(2); // Since driving-car and cycling-regular both resolve
       expect(routes[0].surfaceType).toBe(SurfaceType.ROAD);
+    });
+  });
+
+  describe('SavedRoute operations', () => {
+    it('should save a route to the database successfully', async () => {
+      const mockPoints = [{ latitude: 1.0, longitude: 2.0 }];
+      const result = await service.saveRoute(
+        'user-uuid-1',
+        'Home to Work',
+        1.0, 2.0, 1.1, 2.1,
+        mockPoints,
+        SurfaceType.ROAD,
+        1.5,
+      );
+
+      expect(mockSavedRouteRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 'user-uuid-1',
+        name: 'Home to Work',
+        startLat: 1.0,
+        startLng: 2.0,
+        endLat: 1.1,
+        endLng: 2.1,
+        points: mockPoints,
+        surfaceType: SurfaceType.ROAD,
+        distanceKm: 1.5,
+      }));
+      expect(mockSavedRouteRepository.save).toHaveBeenCalled();
+      expect(result.id).toBe('saved-route-id-123');
+    });
+
+    it('should fetch saved routes for a given user', async () => {
+      const mockSavedList = [{ id: '1', name: 'Route 1', userId: 'user-uuid-1' }];
+      mockSavedRouteRepository.find.mockResolvedValue(mockSavedList);
+
+      const result = await service.getSavedRoutes('user-uuid-1');
+
+      expect(mockSavedRouteRepository.find).toHaveBeenCalledWith({
+        where: { userId: 'user-uuid-1' },
+        order: { createdAt: 'DESC' },
+      });
+      expect(result).toEqual(mockSavedList);
+    });
+
+    it('should delete a saved route if it exists and belongs to the user', async () => {
+      const mockRoute = { id: 'route-1', userId: 'user-uuid-1' };
+      mockSavedRouteRepository.findOne.mockResolvedValue(mockRoute);
+      mockSavedRouteRepository.remove.mockResolvedValue(undefined);
+
+      await service.deleteSavedRoute('user-uuid-1', 'route-1');
+
+      expect(mockSavedRouteRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'route-1', userId: 'user-uuid-1' },
+      });
+      expect(mockSavedRouteRepository.remove).toHaveBeenCalledWith(mockRoute);
+    });
+
+    it('should throw an error if the route to delete is not found or belongs to another user', async () => {
+      mockSavedRouteRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.deleteSavedRoute('user-uuid-1', 'route-1')).rejects.toThrow(
+        'Saved route not found or access denied',
+      );
     });
   });
 });
