@@ -298,16 +298,71 @@ class MapViewModel(
         _searchSuggestions.value = emptyList()
     }
 
+    fun addWaypoint(latLng: LatLng) {
+        _waypoints.value = _waypoints.value + latLng
+        triggerRouteSearch()
+    }
+
+    fun addWaypointAtIndex(index: Int, latLng: LatLng) {
+        val current = _waypoints.value.toMutableList()
+        if (index in 0..current.size) {
+            current.add(index, latLng)
+            _waypoints.value = current
+            triggerRouteSearch()
+        }
+    }
+
+    fun updateWaypoint(index: Int, latLng: LatLng) {
+        val current = _waypoints.value.toMutableList()
+        if (index in current.indices) {
+            current[index] = latLng
+            _waypoints.value = current
+            triggerRouteSearch()
+        }
+    }
+
+    fun removeWaypoint(index: Int) {
+        val current = _waypoints.value.toMutableList()
+        if (index in current.indices) {
+            current.removeAt(index)
+            _waypoints.value = current
+            triggerRouteSearch()
+        }
+    }
+
+    fun clearWaypoints() {
+        _waypoints.value = emptyList()
+        triggerRouteSearch()
+    }
+
+    fun reorderWaypoints(fromIndex: Int, toIndex: Int) {
+        val current = _waypoints.value.toMutableList()
+        if (fromIndex in current.indices && toIndex in current.indices) {
+            val item = current.removeAt(fromIndex)
+            current.add(toIndex, item)
+            _waypoints.value = current
+            triggerRouteSearch()
+        }
+    }
+
     private fun triggerRouteSearch() {
         val start = _startPoint.value
         val end = _endPoint.value
         if (start != null && end != null) {
+            val waypointsList = _waypoints.value
+            val waypointsString = if (waypointsList.isNotEmpty()) {
+                waypointsList.joinToString(separator = "|") { "${it.latitude},${it.longitude}" }
+            } else {
+                null
+            }
+
             viewModelScope.launch {
                 pinRepository.getRoutes(
                     startLat = start.latitude,
                     startLng = start.longitude,
                     endLat = end.latitude,
-                    endLng = end.longitude
+                    endLng = end.longitude,
+                    waypoints = waypointsString
                 ).onSuccess { routes ->
                     _plannedRoutes.value = routes
                     updateSelectedRoute()
