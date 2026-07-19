@@ -79,8 +79,8 @@ describe('RoutesService', () => {
       expect(roadRoute).toBeDefined();
       expect(gravelRoute).toBeDefined();
 
-      expect(roadRoute.dangerPins.length).toBeGreaterThanOrEqual(1);
-      expect(roadRoute.dangerPins.some(p => p.id === 'pin-1')).toBe(true);
+      expect(roadRoute!.dangerPins.length).toBeGreaterThanOrEqual(1);
+      expect(roadRoute!.dangerPins.some(p => p.id === 'pin-1')).toBe(true);
     });
   });
 
