@@ -96,7 +96,8 @@ class FakePinRepository : PinRepository {
         startLat: Double,
         startLng: Double,
         endLat: Double,
-        endLng: Double
+        endLng: Double,
+        waypoints: String?
     ): Result<List<com.njiasalama.domain.model.Route>> {
         val points = listOf(
             com.njiasalama.domain.model.RoutePoint(startLat, startLng),
@@ -121,6 +122,49 @@ class FakePinRepository : PinRepository {
             )
         )
         return Result.success(listOf(roadRoute, gravelRoute))
+    }
+
+    val geocodeResults = mutableListOf<com.njiasalama.domain.model.GeocodeLocation>()
+    val savedRoutesList = mutableListOf<com.njiasalama.domain.model.SavedRoute>()
+
+    override suspend fun geocode(query: String): Result<List<com.njiasalama.domain.model.GeocodeLocation>> {
+        return Result.success(geocodeResults)
+    }
+
+    override suspend fun saveRoute(
+        token: String,
+        name: String,
+        startLat: Double,
+        startLng: Double,
+        endLat: Double,
+        endLng: Double,
+        points: List<com.njiasalama.domain.model.RoutePoint>,
+        surfaceType: com.njiasalama.domain.model.SurfaceType,
+        distanceKm: Double
+    ): Result<com.njiasalama.domain.model.SavedRoute> {
+        val mockSavedRoute = com.njiasalama.domain.model.SavedRoute(
+            id = "saved-route-${java.util.UUID.randomUUID()}",
+            name = name,
+            startLat = startLat,
+            startLng = startLng,
+            endLat = endLat,
+            endLng = endLng,
+            points = points,
+            surfaceType = surfaceType,
+            distanceKm = distanceKm,
+            createdAt = "2026-07-19T12:00:00Z"
+        )
+        savedRoutesList.add(mockSavedRoute)
+        return Result.success(mockSavedRoute)
+    }
+
+    override suspend fun getSavedRoutes(token: String): Result<List<com.njiasalama.domain.model.SavedRoute>> {
+        return Result.success(savedRoutesList.toList())
+    }
+
+    override suspend fun deleteSavedRoute(token: String, id: String): Result<Boolean> {
+        val removed = savedRoutesList.removeIf { it.id == id }
+        return Result.success(removed)
     }
 }
 
@@ -380,5 +424,79 @@ class MapViewModelTest {
         assertTrue(viewModel.plannedRoutes.value.isEmpty())
         assertEquals(null, viewModel.selectedRoute.value)
         assertEquals(null, viewModel.routeSafetyStatus.value)
+    }
+
+    @Test
+    fun testWaypointEditingLogic() = kotlinx.coroutines.test.runTest(testDispatcher) {
+        val viewModel = MapViewModel(tempFolder.newFolder("files"), FakeLocationProvider(), FakePinRepository(), FakeSocketManager(), FakeAuthRepository())
+        this.testScheduler.advanceUntilIdle()
+
+        viewModel.setStartPoint(LatLng(1.0, 1.0))
+        viewModel.setEndPoint(LatLng(2.0, 2.0))
+        this.testScheduler.advanceUntilIdle()
+
+        assertTrue("Waypoints should start empty", viewModel.waypoints.value.isEmpty())
+
+        // Act: Add a waypoint
+        val waypoint = LatLng(1.5, 1.5)
+        viewModel.addWaypoint(waypoint)
+        this.testScheduler.advanceUntilIdle()
+
+        // Assert: Waypoint is added
+        assertEquals(1, viewModel.waypoints.value.size)
+        assertEquals(waypoint, viewModel.waypoints.value[0])
+
+        // Act: Reorder/Update/Remove waypoint
+        val waypoint2 = LatLng(1.8, 1.8)
+        viewModel.addWaypoint(waypoint2)
+        this.testScheduler.advanceUntilIdle()
+        assertEquals(2, viewModel.waypoints.value.size)
+
+        viewModel.reorderWaypoints(0, 1)
+        assertEquals(waypoint2, viewModel.waypoints.value[0])
+        assertEquals(waypoint, viewModel.waypoints.value[1])
+
+        viewModel.removeWaypoint(0)
+        assertEquals(1, viewModel.waypoints.value.size)
+        assertEquals(waypoint, viewModel.waypoints.value[0])
+
+        viewModel.clearWaypoints()
+        assertTrue(viewModel.waypoints.value.isEmpty())
+    }
+
+    @Test
+    fun testSavedRoutesSyncActions() = kotlinx.coroutines.test.runTest(testDispatcher) {
+        val fakeRepo = FakePinRepository()
+        val viewModel = MapViewModel(tempFolder.newFolder("files"), FakeLocationProvider(), fakeRepo, FakeSocketManager(), FakeAuthRepository())
+        this.testScheduler.advanceUntilIdle()
+
+        // Set start/end and planned route
+        viewModel.setStartPoint(LatLng(1.0, 1.0))
+        viewModel.setEndPoint(LatLng(2.0, 2.0))
+        this.testScheduler.advanceUntilIdle()
+
+        // Act: Save active route
+        var isSuccess = false
+        viewModel.saveActiveRoute("My Custom Route", onSuccess = { isSuccess = true })
+        this.testScheduler.advanceUntilIdle()
+
+        assertTrue("Route save should trigger success callback", isSuccess)
+        assertEquals(1, viewModel.savedRoutes.value.size)
+        assertEquals("My Custom Route", viewModel.savedRoutes.value[0].name)
+
+        // Act: Load the saved route on map
+        val saved = viewModel.savedRoutes.value[0]
+        viewModel.clearRoute()
+        assertEquals(null, viewModel.selectedRoute.value)
+
+        viewModel.loadSavedRouteOnMap(saved)
+        assertEquals("My Custom Route", viewModel.selectedRoute.value?.name)
+        assertEquals(LatLng(1.0, 1.0), viewModel.startPoint.value)
+        assertEquals(LatLng(2.0, 2.0), viewModel.endPoint.value)
+
+        // Act: Delete route
+        viewModel.deleteSavedRoute(saved.id)
+        this.testScheduler.advanceUntilIdle()
+        assertTrue("Saved routes should be empty after deletion", viewModel.savedRoutes.value.isEmpty())
     }
 }

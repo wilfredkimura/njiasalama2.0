@@ -110,12 +110,22 @@ class MapViewModel(
     private val _routeSafetyStatus = MutableStateFlow<com.njiasalama.domain.model.RouteSafetyStatus?>(null)
     val routeSafetyStatus: StateFlow<com.njiasalama.domain.model.RouteSafetyStatus?> = _routeSafetyStatus.asStateFlow()
 
+    private val _waypoints = MutableStateFlow<List<LatLng>>(emptyList())
+    val waypoints: StateFlow<List<LatLng>> = _waypoints.asStateFlow()
+
+    private val _savedRoutes = MutableStateFlow<List<com.njiasalama.domain.model.SavedRoute>>(emptyList())
+    val savedRoutes: StateFlow<List<com.njiasalama.domain.model.SavedRoute>> = _savedRoutes.asStateFlow()
+
+    private val _searchSuggestions = MutableStateFlow<List<com.njiasalama.domain.model.GeocodeLocation>>(emptyList())
+    val searchSuggestions: StateFlow<List<com.njiasalama.domain.model.GeocodeLocation>> = _searchSuggestions.asStateFlow()
+
     // --- End of Routing State Properties ---
 
     // Constructor block executed automatically as soon as the ViewModel is initialized
     init {
         loadPins()
         listenToWebSocketUpdates()
+        loadSavedRoutes()
     }
 
     /**
@@ -261,6 +271,7 @@ class MapViewModel(
     fun clearRoute() {
         _startPoint.value = null
         _endPoint.value = null
+        _waypoints.value = emptyList()
         _plannedRoutes.value = emptyList()
         _selectedRoute.value = null
         _surfaceCriteria.value = null
@@ -268,16 +279,91 @@ class MapViewModel(
         _routeSafetyStatus.value = null
     }
 
+    fun searchLocations(query: String) {
+        if (query.trim().isEmpty()) {
+            _searchSuggestions.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            pinRepository.geocode(query)
+                .onSuccess { suggestions ->
+                    _searchSuggestions.value = suggestions
+                }
+                .onFailure {
+                    _searchSuggestions.value = emptyList()
+                }
+        }
+    }
+
+    fun clearSuggestions() {
+        _searchSuggestions.value = emptyList()
+    }
+
+    fun addWaypoint(latLng: LatLng) {
+        _waypoints.value = _waypoints.value + latLng
+        triggerRouteSearch()
+    }
+
+    fun addWaypointAtIndex(index: Int, latLng: LatLng) {
+        val current = _waypoints.value.toMutableList()
+        if (index in 0..current.size) {
+            current.add(index, latLng)
+            _waypoints.value = current
+            triggerRouteSearch()
+        }
+    }
+
+    fun updateWaypoint(index: Int, latLng: LatLng) {
+        val current = _waypoints.value.toMutableList()
+        if (index in current.indices) {
+            current[index] = latLng
+            _waypoints.value = current
+            triggerRouteSearch()
+        }
+    }
+
+    fun removeWaypoint(index: Int) {
+        val current = _waypoints.value.toMutableList()
+        if (index in current.indices) {
+            current.removeAt(index)
+            _waypoints.value = current
+            triggerRouteSearch()
+        }
+    }
+
+    fun clearWaypoints() {
+        _waypoints.value = emptyList()
+        triggerRouteSearch()
+    }
+
+    fun reorderWaypoints(fromIndex: Int, toIndex: Int) {
+        val current = _waypoints.value.toMutableList()
+        if (fromIndex in current.indices && toIndex in current.indices) {
+            val item = current.removeAt(fromIndex)
+            current.add(toIndex, item)
+            _waypoints.value = current
+            triggerRouteSearch()
+        }
+    }
+
     private fun triggerRouteSearch() {
         val start = _startPoint.value
         val end = _endPoint.value
         if (start != null && end != null) {
+            val waypointsList = _waypoints.value
+            val waypointsString = if (waypointsList.isNotEmpty()) {
+                waypointsList.joinToString(separator = "|") { "${it.latitude},${it.longitude}" }
+            } else {
+                null
+            }
+
             viewModelScope.launch {
                 pinRepository.getRoutes(
                     startLat = start.latitude,
                     startLng = start.longitude,
                     endLat = end.latitude,
-                    endLng = end.longitude
+                    endLng = end.longitude,
+                    waypoints = waypointsString
                 ).onSuccess { routes ->
                     _plannedRoutes.value = routes
                     updateSelectedRoute()
@@ -326,6 +412,123 @@ class MapViewModel(
                 else -> com.njiasalama.domain.model.RouteSafetyStatus.DANGEROUS
             }
         }
+    }
+
+    fun saveActiveRoute(routeName: String, onSuccess: () -> Unit = {}, onFailure: (String) -> Unit = {}) {
+        val route = _selectedRoute.value ?: return
+        val start = _startPoint.value ?: return
+        val end = _endPoint.value ?: return
+
+        viewModelScope.launch {
+            val token = authRepository.getToken() ?: ""
+            pinRepository.saveRoute(
+                token = token,
+                name = routeName,
+                startLat = start.latitude,
+                startLng = start.longitude,
+                endLat = end.latitude,
+                endLng = end.longitude,
+                points = route.points,
+                surfaceType = route.surfaceType,
+                distanceKm = route.distanceKm
+            ).onSuccess {
+                loadSavedRoutes()
+                onSuccess()
+            }.onFailure {
+                onFailure(it.message ?: "Failed to save route")
+            }
+        }
+    }
+
+    fun loadSavedRoutes() {
+        viewModelScope.launch {
+            val token = authRepository.getToken() ?: ""
+            pinRepository.getSavedRoutes(token)
+                .onSuccess { routes ->
+                    _savedRoutes.value = routes
+                }
+                .onFailure {
+                    _savedRoutes.value = emptyList()
+                }
+        }
+    }
+
+    fun deleteSavedRoute(routeId: String) {
+        viewModelScope.launch {
+            val token = authRepository.getToken() ?: ""
+            pinRepository.deleteSavedRoute(token, routeId)
+                .onSuccess {
+                    loadSavedRoutes()
+                }
+        }
+    }
+
+    fun loadSavedRouteOnMap(savedRoute: com.njiasalama.domain.model.SavedRoute) {
+        _startPoint.value = LatLng(savedRoute.startLat, savedRoute.startLng)
+        _endPoint.value = LatLng(savedRoute.endLat, savedRoute.endLng)
+        _waypoints.value = emptyList()
+
+        val allPins = when (val state = _uiState.value) {
+            is MapUiState.Success -> state.pins
+            else -> emptyList()
+        }
+        val routePoints = savedRoute.points.map { LatLng(it.latitude, it.longitude) }
+        val dangerPins = filterPinsNearRoute(routePoints, allPins, 100.0)
+
+        val route = com.njiasalama.domain.model.Route(
+            id = savedRoute.id,
+            name = savedRoute.name,
+            points = savedRoute.points,
+            surfaceType = savedRoute.surfaceType,
+            distanceKm = savedRoute.distanceKm,
+            dangerPins = dangerPins
+        )
+
+        _plannedRoutes.value = listOf(route)
+        selectRoute(route)
+    }
+
+    private fun filterPinsNearRoute(routePoints: List<LatLng>, pins: List<DangerPin>, thresholdMeters: Double): List<DangerPin> {
+        val result = mutableListOf<DangerPin>()
+        for (pin in pins) {
+            val pinLatLng = LatLng(pin.latitude, pin.longitude)
+            var isClose = false
+            for (i in 0 until routePoints.size - 1) {
+                if (getDistanceToSegment(pinLatLng, routePoints[i], routePoints[i + 1]) <= thresholdMeters) {
+                    isClose = true
+                    break
+                }
+            }
+            if (isClose) {
+                result.add(pin)
+            }
+        }
+        return result
+    }
+
+    private fun getDistanceToSegment(p: LatLng, a: LatLng, b: LatLng): Double {
+        val dLng = b.longitude - a.longitude
+        val dLat = b.latitude - a.latitude
+        if (dLng == 0.0 && dLat == 0.0) {
+            return getHaversineDistance(p, a)
+        }
+        var t = ((p.longitude - a.longitude) * dLng + (p.latitude - a.latitude) * dLat) / (dLng * dLng + dLat * dLat)
+        t = Math.max(0.0, Math.min(1.0, t))
+        val c = LatLng(a.latitude + t * dLat, a.longitude + t * dLng)
+        return getHaversineDistance(p, c)
+    }
+
+    private fun getHaversineDistance(p1: LatLng, p2: LatLng): Double {
+        val r = 6371e3 // Earth's radius in meters
+        val phi1 = p1.latitude * Math.PI / 180
+        val phi2 = p2.latitude * Math.PI / 180
+        val dPhi = (p2.latitude - p1.latitude) * Math.PI / 180
+        val dLambda = (p2.longitude - p1.longitude) * Math.PI / 180
+        val a = Math.sin(dPhi / 2) * Math.sin(dPhi / 2) +
+                Math.cos(phi1) * Math.cos(phi2) *
+                Math.sin(dLambda / 2) * Math.sin(dLambda / 2)
+        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        return r * c
     }
 
     /**

@@ -3,6 +3,8 @@ package com.njiasalama.domain.repository
 import com.njiasalama.domain.model.DangerPin
 import com.njiasalama.domain.model.HazardType
 import com.njiasalama.domain.model.Route
+import com.njiasalama.domain.model.SavedRoute
+import com.njiasalama.domain.model.GeocodeLocation
 
 /**
  * Interface defining the contract for database and network operations on road hazard pins.
@@ -45,6 +47,25 @@ interface PinRepository {
         startLat: Double,
         startLng: Double,
         endLat: Double,
-        endLng: Double
+        endLng: Double,
+        waypoints: String? = null
     ): Result<List<Route>>
+
+    suspend fun geocode(query: String): Result<List<GeocodeLocation>>
+
+    suspend fun saveRoute(
+        token: String,
+        name: String,
+        startLat: Double,
+        startLng: Double,
+        endLat: Double,
+        endLng: Double,
+        points: List<com.njiasalama.domain.model.RoutePoint>,
+        surfaceType: com.njiasalama.domain.model.SurfaceType,
+        distanceKm: Double
+    ): Result<SavedRoute>
+
+    suspend fun getSavedRoutes(token: String): Result<List<SavedRoute>>
+
+    suspend fun deleteSavedRoute(token: String, id: String): Result<Boolean>
 }

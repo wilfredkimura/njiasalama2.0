@@ -70,10 +70,42 @@ class FakeNjiaSalamaApi(
         startLat: Double,
         startLng: Double,
         endLat: Double,
-        endLng: Double
+        endLng: Double,
+        waypoints: String?
     ): List<com.njiasalama.domain.model.Route> {
         if (shouldFail) throw java.io.IOException("Network connection timeout")
         return emptyList()
+    }
+
+    override suspend fun geocode(query: String): List<com.njiasalama.domain.model.GeocodeLocation> {
+        if (shouldFail) throw java.io.IOException("Network connection timeout")
+        return emptyList()
+    }
+
+    override suspend fun saveRoute(token: String, request: SavedRouteRequest): com.njiasalama.domain.model.SavedRoute {
+        if (shouldFail) throw java.io.IOException("Network connection timeout")
+        return com.njiasalama.domain.model.SavedRoute(
+            id = "saved-id",
+            name = request.name,
+            startLat = request.startLat,
+            startLng = request.startLng,
+            endLat = request.endLat,
+            endLng = request.endLng,
+            points = request.points,
+            surfaceType = request.surfaceType,
+            distanceKm = request.distanceKm,
+            createdAt = "2026-07-19T12:00:00Z"
+        )
+    }
+
+    override suspend fun getSavedRoutes(token: String): List<com.njiasalama.domain.model.SavedRoute> {
+        if (shouldFail) throw java.io.IOException("Network connection timeout")
+        return emptyList()
+    }
+
+    override suspend fun deleteSavedRoute(token: String, id: String): Map<String, Boolean> {
+        if (shouldFail) throw java.io.IOException("Network connection timeout")
+        return mapOf("success" to true)
     }
 }
 

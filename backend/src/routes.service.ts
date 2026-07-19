@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { PinsService } from './pins/pins.service';
-import { Route, RoutePoint, SurfaceType } from './route.interface';
+import { Route, RoutePoint, SurfaceType, GeocodeLocation } from './route.interface';
 import { DangerPin } from './pins/pins.entity';
+import { SavedRoute } from './routes/saved-route.entity';
 
 @Injectable()
 export class RoutesService {
@@ -11,6 +14,8 @@ export class RoutesService {
   constructor(
     private readonly configService: ConfigService,
     private readonly pinsService: PinsService,
+    @InjectRepository(SavedRoute)
+    private readonly savedRouteRepository: Repository<SavedRoute>,
   ) {}
 
   /**
@@ -23,6 +28,7 @@ export class RoutesService {
     startLng: number,
     endLat: number,
     endLng: number,
+    waypoints?: string,
   ): Promise<Route[]> {
     const apiKey = this.configService.get<string>('ORS_API_KEY');
     let routes: Route[] = [];
@@ -30,8 +36,8 @@ export class RoutesService {
     if (apiKey && apiKey.trim().length > 0) {
       try {
         const results = await Promise.allSettled([
-          this.fetchFromOpenRouteService(apiKey, 'driving-car', startLat, startLng, endLat, endLng),
-          this.fetchFromOpenRouteService(apiKey, 'cycling-regular', startLat, startLng, endLat, endLng),
+          this.fetchFromOpenRouteService(apiKey, 'driving-car', startLat, startLng, endLat, endLng, waypoints),
+          this.fetchFromOpenRouteService(apiKey, 'cycling-regular', startLat, startLng, endLat, endLng, waypoints),
         ]);
 
         for (const res of results) {
@@ -49,11 +55,11 @@ export class RoutesService {
         this.logger.error(
           `Failed to fetch routes from OpenRouteService: ${error.message}. Falling back to simulation.`,
         );
-        routes = this.generateSimulatedRoutes(startLat, startLng, endLat, endLng);
+        routes = this.generateSimulatedRoutes(startLat, startLng, endLat, endLng, waypoints);
       }
     } else {
       this.logger.warn('ORS_API_KEY is not configured in .env file. Using simulated routes.');
-      routes = this.generateSimulatedRoutes(startLat, startLng, endLat, endLng);
+      routes = this.generateSimulatedRoutes(startLat, startLng, endLat, endLng, waypoints);
     }
 
     // Associate all danger pins from the database that are within 100m of each route
@@ -75,24 +81,46 @@ export class RoutesService {
     startLng: number,
     endLat: number,
     endLng: number,
+    waypoints?: string,
   ): Promise<Route[]> {
     const url = `https://api.openrouteservice.org/v2/directions/${profile}/geojson`;
+    
+    // Construct coordinates array including optional waypoints
+    const coords: [number, number][] = [[startLng, startLat]];
+    if (waypoints && waypoints.trim().length > 0) {
+      const pts = waypoints.split(/[|;]/);
+      for (const pt of pts) {
+        const parts = pt.split(',');
+        if (parts.length === 2) {
+          const lat = parseFloat(parts[0]);
+          const lng = parseFloat(parts[1]);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            coords.push([lng, lat]);
+          }
+        }
+      }
+    }
+    coords.push([endLng, endLat]);
+
+    const requestBody: any = {
+      coordinates: coords,
+      extra_info: ['surface'],
+    };
+
+    // OpenRouteService only supports alternative routes for simple point-to-point queries (exactly 2 coordinates)
+    if (coords.length === 2) {
+      requestBody.alternative_routes = {
+        target_count: 2,
+      };
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': apiKey,
       },
-      body: JSON.stringify({
-        coordinates: [
-          [startLng, startLat], // GeoJSON expects [longitude, latitude]
-          [endLng, endLat],
-        ],
-        extra_info: ['surface'],
-        alternative_routes: {
-          target_count: 2,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -154,6 +182,7 @@ export class RoutesService {
     startLng: number,
     endLat: number,
     endLng: number,
+    waypoints?: string,
   ): Route[] {
     const directPoints: RoutePoint[] = this.interpolatePoints(
       startLat,
@@ -311,5 +340,102 @@ export class RoutesService {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c;
+  }
+
+  /**
+   * Proxies location search queries to OpenRouteService Geocoding API.
+   * Securely uses the configured ORS_API_KEY.
+   */
+  async searchLocations(query: string): Promise<GeocodeLocation[]> {
+    const apiKey = this.configService.get<string>('ORS_API_KEY');
+    if (!apiKey || apiKey.trim().length === 0) {
+      this.logger.warn('ORS_API_KEY is not configured. Returning simulated fallback search results.');
+      return [
+        { name: `${query} (Simulated Location 1)`, latitude: -1.2921, longitude: 36.8219 },
+        { name: `${query} (Simulated Location 2)`, latitude: -1.3000, longitude: 36.8500 },
+      ];
+    }
+
+    if (!query || query.trim().length === 0) {
+      return [];
+    }
+
+    try {
+      const url = `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${encodeURIComponent(query)}&size=5`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`ORS Geocoding API responded with status ${response.status}`);
+      }
+
+      const geojson: any = await response.json();
+      const features = geojson.features || [];
+      
+      return features.map((feature: any) => {
+        const [lng, lat] = feature.geometry.coordinates;
+        return {
+          name: feature.properties.label || feature.properties.name || 'Unknown Location',
+          latitude: lat,
+          longitude: lng,
+        };
+      });
+    } catch (error) {
+      this.logger.error(`Failed to geocode query "${query}": ${error.message}. Returning fallback simulated results.`);
+      return [
+        { name: `${query} (Simulated Fallback 1)`, latitude: -1.2921, longitude: 36.8219 },
+        { name: `${query} (Simulated Fallback 2)`, latitude: -1.3000, longitude: 36.8500 },
+      ];
+    }
+  }
+
+  /**
+   * Saves a route polyline along with start/end details and metadata to the database.
+   */
+  async saveRoute(
+    userId: string,
+    name: string,
+    startLat: number,
+    startLng: number,
+    endLat: number,
+    endLng: number,
+    points: RoutePoint[],
+    surfaceType: SurfaceType,
+    distanceKm: number,
+  ): Promise<SavedRoute> {
+    const savedRoute = this.savedRouteRepository.create({
+      userId,
+      name,
+      startLat,
+      startLng,
+      endLat,
+      endLng,
+      points,
+      surfaceType,
+      distanceKm,
+    });
+    return await this.savedRouteRepository.save(savedRoute);
+  }
+
+  /**
+   * Fetches the complete list of saved routes for a given user.
+   */
+  async getSavedRoutes(userId: string): Promise<SavedRoute[]> {
+    return await this.savedRouteRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Deletes a saved route from the database.
+   * Ensures the route belongs to the user requesting deletion.
+   */
+  async deleteSavedRoute(userId: string, routeId: string): Promise<void> {
+    const route = await this.savedRouteRepository.findOne({
+      where: { id: routeId, userId },
+    });
+    if (!route) {
+      throw new Error('Saved route not found or access denied');
+    }
+    await this.savedRouteRepository.remove(route);
   }
 }

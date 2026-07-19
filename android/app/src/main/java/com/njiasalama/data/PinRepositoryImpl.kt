@@ -4,6 +4,8 @@ import com.njiasalama.domain.model.DangerPin
 import com.njiasalama.domain.model.HazardType
 import com.njiasalama.domain.repository.PinRepository
 import com.njiasalama.domain.model.Route
+import com.njiasalama.domain.model.SavedRoute
+import com.njiasalama.domain.model.GeocodeLocation
 
 /**
  * Concrete implementation of PinRepository managing network data calls to the NjiaSalama API.
@@ -89,8 +91,46 @@ class PinRepositoryImpl(
         startLat: Double,
         startLng: Double,
         endLat: Double,
-        endLng: Double
+        endLng: Double,
+        waypoints: String?
     ): Result<List<Route>> = runCatching {
-        api.getRoutes(startLat, startLng, endLat, endLng)
+        api.getRoutes(startLat, startLng, endLat, endLng, waypoints)
+    }
+
+    override suspend fun geocode(query: String): Result<List<GeocodeLocation>> = runCatching {
+        api.geocode(query)
+    }
+
+    override suspend fun saveRoute(
+        token: String,
+        name: String,
+        startLat: Double,
+        startLng: Double,
+        endLat: Double,
+        endLng: Double,
+        points: List<com.njiasalama.domain.model.RoutePoint>,
+        surfaceType: com.njiasalama.domain.model.SurfaceType,
+        distanceKm: Double
+    ): Result<SavedRoute> = runCatching {
+        val request = SavedRouteRequest(
+            name = name,
+            startLat = startLat,
+            startLng = startLng,
+            endLat = endLat,
+            endLng = endLng,
+            points = points,
+            surfaceType = surfaceType,
+            distanceKm = distanceKm
+        )
+        api.saveRoute("Bearer $token", request)
+    }
+
+    override suspend fun getSavedRoutes(token: String): Result<List<SavedRoute>> = runCatching {
+        api.getSavedRoutes("Bearer $token")
+    }
+
+    override suspend fun deleteSavedRoute(token: String, id: String): Result<Boolean> = runCatching {
+        val response = api.deleteSavedRoute("Bearer $token", id)
+        response["success"] == true
     }
 }
