@@ -110,6 +110,15 @@ class MapViewModel(
     private val _routeSafetyStatus = MutableStateFlow<com.njiasalama.domain.model.RouteSafetyStatus?>(null)
     val routeSafetyStatus: StateFlow<com.njiasalama.domain.model.RouteSafetyStatus?> = _routeSafetyStatus.asStateFlow()
 
+    private val _waypoints = MutableStateFlow<List<LatLng>>(emptyList())
+    val waypoints: StateFlow<List<LatLng>> = _waypoints.asStateFlow()
+
+    private val _savedRoutes = MutableStateFlow<List<com.njiasalama.domain.model.SavedRoute>>(emptyList())
+    val savedRoutes: StateFlow<List<com.njiasalama.domain.model.SavedRoute>> = _savedRoutes.asStateFlow()
+
+    private val _searchSuggestions = MutableStateFlow<List<com.njiasalama.domain.model.GeocodeLocation>>(emptyList())
+    val searchSuggestions: StateFlow<List<com.njiasalama.domain.model.GeocodeLocation>> = _searchSuggestions.asStateFlow()
+
     // --- End of Routing State Properties ---
 
     // Constructor block executed automatically as soon as the ViewModel is initialized
@@ -261,11 +270,32 @@ class MapViewModel(
     fun clearRoute() {
         _startPoint.value = null
         _endPoint.value = null
+        _waypoints.value = emptyList()
         _plannedRoutes.value = emptyList()
         _selectedRoute.value = null
         _surfaceCriteria.value = null
         _safetyCriteria.value = false
         _routeSafetyStatus.value = null
+    }
+
+    fun searchLocations(query: String) {
+        if (query.trim().isEmpty()) {
+            _searchSuggestions.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            pinRepository.geocode(query)
+                .onSuccess { suggestions ->
+                    _searchSuggestions.value = suggestions
+                }
+                .onFailure {
+                    _searchSuggestions.value = emptyList()
+                }
+        }
+    }
+
+    fun clearSuggestions() {
+        _searchSuggestions.value = emptyList()
     }
 
     private fun triggerRouteSearch() {
