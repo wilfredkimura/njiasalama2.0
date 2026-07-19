@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { RoutesController } from './routes.controller';
 import { RoutesService } from './routes.service';
 import { PinsModule } from './pins/pins.module';
+import { SavedRoute } from './routes/saved-route.entity';
 
 @Module({
-  imports: [PinsModule],
+  imports: [
+    PinsModule,
+    TypeOrmModule.forFeature([SavedRoute]),
+  ],
   controllers: [RoutesController],
   providers: [RoutesService],
 })
