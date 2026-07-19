@@ -7,8 +7,6 @@ import { PinsModule } from './pins/pins.module'; // Importing the PinsModule to 
 import { UsersModule } from './users/users.module'; // Registering user identities module
 import { AuthModule } from './auth/auth.module';   // Registering authentication controller module
 import { RoutesModule } from './routes.module';
-import { RoutesController } from './routes.controller';
-import { RoutesService } from './routes.service';
 
 /**
  * Configuration factory for TypeORM module options.
@@ -52,7 +50,7 @@ export function getTypeOrmModuleOptions(configService: ConfigService) {
     UsersModule, // Register users operations
     AuthModule, RoutesModule,  // Register auth endpoints and JWT signature validations
   ],
-  controllers: [AppController, RoutesController],
-  providers: [AppService, RoutesService],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
