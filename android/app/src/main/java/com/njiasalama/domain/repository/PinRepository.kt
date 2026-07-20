@@ -51,7 +51,7 @@ interface PinRepository {
         waypoints: String? = null
     ): Result<List<Route>>
 
-    suspend fun geocode(query: String): Result<List<GeocodeLocation>>
+    suspend fun geocode(query: String, focusLat: Double? = null, focusLng: Double? = null): Result<List<GeocodeLocation>>
 
     suspend fun saveRoute(
         token: String,
