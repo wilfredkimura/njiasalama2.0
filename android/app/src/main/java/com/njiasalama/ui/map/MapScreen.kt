@@ -633,7 +633,10 @@ fun MapScreen(
                 .padding(16.dp)
         ) {
             FloatingActionButton(
-                onClick = { showProfileMenu = true },
+                onClick = {
+                    showProfileMenu = true
+                    viewModel.loadSavedRoutes()
+                },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shape = androidx.compose.foundation.shape.CircleShape,
