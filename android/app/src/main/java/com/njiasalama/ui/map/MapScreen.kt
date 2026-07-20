@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -749,6 +750,7 @@ fun MapScreen(
                 onRouteSelected = { viewModel.selectRoute(it) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .imePadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             )
         } else {
