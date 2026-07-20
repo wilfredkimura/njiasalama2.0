@@ -346,13 +346,18 @@ export class RoutesService {
    * Proxies location search queries to OpenRouteService Geocoding API.
    * Securely uses the configured ORS_API_KEY.
    */
-  async searchLocations(query: string): Promise<GeocodeLocation[]> {
+  async searchLocations(query: string, focusLat?: number, focusLng?: number): Promise<GeocodeLocation[]> {
     const apiKey = this.configService.get<string>('ORS_API_KEY');
     if (!apiKey || apiKey.trim().length === 0) {
       this.logger.warn('ORS_API_KEY is not configured. Returning simulated fallback search results.');
       return [
-        { name: `${query} (Simulated Location 1)`, latitude: -1.2921, longitude: 36.8219 },
-        { name: `${query} (Simulated Location 2)`, latitude: -1.3000, longitude: 36.8500 },
+        { name: `${query}, Nairobi, Kenya (Simulated)`, latitude: -1.2921, longitude: 36.8219 },
+        { name: `${query}, Mombasa, Kenya (Simulated)`, latitude: -4.0435, longitude: 39.6682 },
+        { name: `${query}, Kisumu, Kenya (Simulated)`, latitude: -0.0917, longitude: 34.7680 },
+        { name: `${query}, Nakuru, Kenya (Simulated)`, latitude: -0.3031, longitude: 36.0800 },
+        { name: `${query}, Eldoret, Kenya (Simulated)`, latitude: 0.5143, longitude: 35.2697 },
+        { name: `${query}, Karen, Nairobi (Simulated)`, latitude: -1.3533, longitude: 36.7126 },
+        { name: `${query}, Westlands, Nairobi (Simulated)`, latitude: -1.2618, longitude: 36.8041 },
       ];
     }
 
@@ -361,7 +366,11 @@ export class RoutesService {
     }
 
     try {
-      const url = `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${encodeURIComponent(query)}&size=5`;
+      let url = `https://api.openrouteservice.org/geocode/search?api_key=${apiKey}&text=${encodeURIComponent(query)}&size=10&boundary.country=KEN`;
+      if (focusLat !== undefined && focusLng !== undefined) {
+        url += `&focus.point.lat=${focusLat}&focus.point.lon=${focusLng}`;
+      }
+
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`ORS Geocoding API responded with status ${response.status}`);
@@ -381,8 +390,13 @@ export class RoutesService {
     } catch (error) {
       this.logger.error(`Failed to geocode query "${query}": ${error.message}. Returning fallback simulated results.`);
       return [
-        { name: `${query} (Simulated Fallback 1)`, latitude: -1.2921, longitude: 36.8219 },
-        { name: `${query} (Simulated Fallback 2)`, latitude: -1.3000, longitude: 36.8500 },
+        { name: `${query}, Nairobi, Kenya (Simulated)`, latitude: -1.2921, longitude: 36.8219 },
+        { name: `${query}, Mombasa, Kenya (Simulated)`, latitude: -4.0435, longitude: 39.6682 },
+        { name: `${query}, Kisumu, Kenya (Simulated)`, latitude: -0.0917, longitude: 34.7680 },
+        { name: `${query}, Nakuru, Kenya (Simulated)`, latitude: -0.3031, longitude: 36.0800 },
+        { name: `${query}, Eldoret, Kenya (Simulated)`, latitude: 0.5143, longitude: 35.2697 },
+        { name: `${query}, Karen, Nairobi (Simulated)`, latitude: -1.3533, longitude: 36.7126 },
+        { name: `${query}, Westlands, Nairobi (Simulated)`, latitude: -1.2618, longitude: 36.8041 },
       ];
     }
   }

@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -632,7 +633,10 @@ fun MapScreen(
                 .padding(16.dp)
         ) {
             FloatingActionButton(
-                onClick = { showProfileMenu = true },
+                onClick = {
+                    showProfileMenu = true
+                    viewModel.loadSavedRoutes()
+                },
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shape = androidx.compose.foundation.shape.CircleShape,
@@ -725,6 +729,7 @@ fun MapScreen(
                 startPoint = startPoint,
                 endPoint = endPoint,
                 waypoints = waypoints,
+                userLocation = userLocation,
                 savedRoutes = savedRoutes,
                 searchSuggestions = searchSuggestions,
                 plannedRoutes = plannedRoutes,
@@ -749,6 +754,7 @@ fun MapScreen(
                 onRouteSelected = { viewModel.selectRoute(it) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .imePadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             )
         } else {
@@ -853,6 +859,7 @@ fun RoutePlannerPanel(
     startPoint: LatLng?,
     endPoint: LatLng?,
     waypoints: List<LatLng>,
+    userLocation: LatLng?,
     savedRoutes: List<com.njiasalama.domain.model.SavedRoute>,
     searchSuggestions: List<com.njiasalama.domain.model.GeocodeLocation>,
     plannedRoutes: List<Route>,
@@ -962,7 +969,7 @@ fun RoutePlannerPanel(
                             }
                         )
                     }
-                    if (activeSearchField == "start" && searchSuggestions.isNotEmpty()) {
+                    if (activeSearchField == "start") {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -970,7 +977,51 @@ fun RoutePlannerPanel(
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                         ) {
                             Column {
-                                searchSuggestions.take(3).forEach { suggestion ->
+                                if (userLocation != null) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                onStartPointChanged(userLocation)
+                                                activeSearchField = null
+                                                searchQuery = ""
+                                                onClearSuggestions()
+                                            }
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = "Current Location",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Use Current Location",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    if (searchSuggestions.isNotEmpty()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(1.dp)
+                                                .background(Color.LightGray.copy(alpha = 0.5f))
+                                        )
+                                    }
+                                } else if (searchSuggestions.isEmpty()) {
+                                    Text(
+                                        text = "Type to search...",
+                                        modifier = Modifier.padding(12.dp),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.Gray
+                                    )
+                                }
+
+                                searchSuggestions.take(5).forEach { suggestion ->
                                     Text(
                                         text = suggestion.name,
                                         modifier = Modifier
@@ -1060,7 +1111,7 @@ fun RoutePlannerPanel(
                             singleLine = true
                         )
                     }
-                    if (activeSearchField == "add_waypoint" && searchSuggestions.isNotEmpty()) {
+                    if (activeSearchField == "add_waypoint") {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1068,7 +1119,51 @@ fun RoutePlannerPanel(
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                         ) {
                             Column {
-                                searchSuggestions.take(3).forEach { suggestion ->
+                                if (userLocation != null) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                onWaypointAdded(userLocation)
+                                                activeSearchField = null
+                                                searchQuery = ""
+                                                onClearSuggestions()
+                                            }
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = "Current Location",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Use Current Location",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    if (searchSuggestions.isNotEmpty()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(1.dp)
+                                                .background(Color.LightGray.copy(alpha = 0.5f))
+                                        )
+                                    }
+                                } else if (searchSuggestions.isEmpty()) {
+                                    Text(
+                                        text = "Type to search...",
+                                        modifier = Modifier.padding(12.dp),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.Gray
+                                    )
+                                }
+
+                                searchSuggestions.take(5).forEach { suggestion ->
                                     Text(
                                         text = suggestion.name,
                                         modifier = Modifier
@@ -1128,7 +1223,7 @@ fun RoutePlannerPanel(
                             }
                         )
                     }
-                    if (activeSearchField == "end" && searchSuggestions.isNotEmpty()) {
+                    if (activeSearchField == "end") {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1136,7 +1231,51 @@ fun RoutePlannerPanel(
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                         ) {
                             Column {
-                                searchSuggestions.take(3).forEach { suggestion ->
+                                if (userLocation != null) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                onEndPointChanged(userLocation)
+                                                activeSearchField = null
+                                                searchQuery = ""
+                                                onClearSuggestions()
+                                            }
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = "Current Location",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Use Current Location",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    if (searchSuggestions.isNotEmpty()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(1.dp)
+                                                .background(Color.LightGray.copy(alpha = 0.5f))
+                                        )
+                                    }
+                                } else if (searchSuggestions.isEmpty()) {
+                                    Text(
+                                        text = "Type to search...",
+                                        modifier = Modifier.padding(12.dp),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.Gray
+                                    )
+                                }
+
+                                searchSuggestions.take(5).forEach { suggestion ->
                                     Text(
                                         text = suggestion.name,
                                         modifier = Modifier

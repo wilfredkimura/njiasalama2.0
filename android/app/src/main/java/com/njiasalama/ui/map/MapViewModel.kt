@@ -284,8 +284,9 @@ class MapViewModel(
             _searchSuggestions.value = emptyList()
             return
         }
+        val userLoc = _userLocation.value
         viewModelScope.launch {
-            pinRepository.geocode(query)
+            pinRepository.geocode(query, userLoc?.latitude, userLoc?.longitude)
                 .onSuccess { suggestions ->
                     _searchSuggestions.value = suggestions
                 }

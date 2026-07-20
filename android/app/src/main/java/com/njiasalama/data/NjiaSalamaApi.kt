@@ -70,7 +70,9 @@ interface NjiaSalamaApi {
 
     @GET("routes/geocode")
     suspend fun geocode(
-        @Query("query") query: String
+        @Query("query") query: String,
+        @Query("focusLat") focusLat: Double? = null,
+        @Query("focusLng") focusLng: Double? = null
     ): List<GeocodeLocation>
 
     @POST("routes/save")

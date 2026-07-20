@@ -77,7 +77,7 @@ class FakeNjiaSalamaApi(
         return emptyList()
     }
 
-    override suspend fun geocode(query: String): List<com.njiasalama.domain.model.GeocodeLocation> {
+    override suspend fun geocode(query: String, focusLat: Double?, focusLng: Double?): List<com.njiasalama.domain.model.GeocodeLocation> {
         if (shouldFail) throw java.io.IOException("Network connection timeout")
         return emptyList()
     }

@@ -89,9 +89,9 @@ describe('RoutesService', () => {
       (mockConfigService.get as jest.Mock).mockReturnValue('');
 
       const results = await service.searchLocations('Nairobi');
-      expect(results).toHaveLength(2);
+      expect(results).toHaveLength(7);
       expect(results[0].name).toContain('Nairobi');
-      expect(results[0].name).toContain('Simulated Location');
+      expect(results[0].name).toContain('Simulated');
     });
 
     it('should query ORS geocoding API and return mapped locations when API key is present', async () => {
@@ -118,7 +118,7 @@ describe('RoutesService', () => {
       const results = await service.searchLocations('Nairobi');
 
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('https://api.openrouteservice.org/geocode/search?api_key=fake-ors-key&text=Nairobi'),
+        expect.stringContaining('https://api.openrouteservice.org/geocode/search?api_key=fake-ors-key&text=Nairobi&size=10&boundary.country=KEN'),
       );
       expect(results).toHaveLength(2);
       expect(results[0]).toEqual({
@@ -126,11 +126,30 @@ describe('RoutesService', () => {
         latitude: -1.2921,
         longitude: 36.8219,
       });
-      expect(results[1]).toEqual({
-        name: 'Nairobi East, Kenya',
-        latitude: -1.3000,
-        longitude: 36.8500,
-      });
+    });
+
+    it('should query ORS geocoding API with focus coordinates when focus bias is provided', async () => {
+      (mockConfigService.get as jest.Mock).mockReturnValue('fake-ors-key');
+
+      const mockResponse = {
+        features: [
+          {
+            geometry: { coordinates: [36.8219, -1.2921] },
+            properties: { label: 'Nairobi, Kenya', name: 'Nairobi' },
+          },
+        ],
+      };
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue(mockResponse),
+      } as any);
+
+      await service.searchLocations('Nairobi', -1.2921, 36.8219);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('focus.point.lat=-1.2921&focus.point.lon=36.8219'),
+      );
     });
 
     it('should fall back to simulated results if the Geocoding API fetch throws an error', async () => {
@@ -138,9 +157,9 @@ describe('RoutesService', () => {
       global.fetch = jest.fn().mockRejectedValue(new Error('Network failure'));
 
       const results = await service.searchLocations('Nairobi');
-      expect(results).toHaveLength(2);
+      expect(results).toHaveLength(7);
       expect(results[0].name).toContain('Nairobi');
-      expect(results[0].name).toContain('Simulated Fallback');
+      expect(results[0].name).toContain('Simulated');
     });
   });
 

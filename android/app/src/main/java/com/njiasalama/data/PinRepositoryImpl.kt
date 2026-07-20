@@ -97,8 +97,8 @@ class PinRepositoryImpl(
         api.getRoutes(startLat, startLng, endLat, endLng, waypoints)
     }
 
-    override suspend fun geocode(query: String): Result<List<GeocodeLocation>> = runCatching {
-        api.geocode(query)
+    override suspend fun geocode(query: String, focusLat: Double?, focusLng: Double?): Result<List<GeocodeLocation>> = runCatching {
+        api.geocode(query, focusLat, focusLng)
     }
 
     override suspend fun saveRoute(

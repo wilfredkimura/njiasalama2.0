@@ -34,7 +34,7 @@ class FakeLocationProvider : LocationProvider {
     }
 }
 
-class FakePinRepository : PinRepository {
+open class FakePinRepository : PinRepository {
     private val pins = mutableListOf(
         DangerPin(
             id = "1", 
@@ -127,7 +127,7 @@ class FakePinRepository : PinRepository {
     val geocodeResults = mutableListOf<com.njiasalama.domain.model.GeocodeLocation>()
     val savedRoutesList = mutableListOf<com.njiasalama.domain.model.SavedRoute>()
 
-    override suspend fun geocode(query: String): Result<List<com.njiasalama.domain.model.GeocodeLocation>> {
+    override suspend fun geocode(query: String, focusLat: Double?, focusLng: Double?): Result<List<com.njiasalama.domain.model.GeocodeLocation>> {
         return Result.success(geocodeResults)
     }
 
@@ -498,5 +498,36 @@ class MapViewModelTest {
         viewModel.deleteSavedRoute(saved.id)
         this.testScheduler.advanceUntilIdle()
         assertTrue("Saved routes should be empty after deletion", viewModel.savedRoutes.value.isEmpty())
+    }
+
+    @Test
+    fun testGeocodeIncludesUserLocationAsFocus() = kotlinx.coroutines.test.runTest(testDispatcher) {
+        val fakeRepo = object : FakePinRepository() {
+            var capturedQuery: String? = null
+            var capturedLat: Double? = null
+            var capturedLng: Double? = null
+
+            override suspend fun geocode(query: String, focusLat: Double?, focusLng: Double?): Result<List<com.njiasalama.domain.model.GeocodeLocation>> {
+                capturedQuery = query
+                capturedLat = focusLat
+                capturedLng = focusLng
+                return Result.success(emptyList())
+            }
+        }
+        val viewModel = MapViewModel(tempFolder.newFolder("files"), FakeLocationProvider(), fakeRepo, FakeSocketManager(), FakeAuthRepository())
+        this.testScheduler.advanceUntilIdle()
+
+        // Setup: Start location updates to set user location flow
+        viewModel.startLocationUpdates()
+        this.testScheduler.advanceUntilIdle()
+
+        // Act: Trigger geocoding search
+        viewModel.searchLocations("Westlands")
+        this.testScheduler.advanceUntilIdle()
+
+        // Assert: Confirm query and location-aware coordinates are correct
+        assertEquals("Westlands", fakeRepo.capturedQuery)
+        assertEquals(-1.2921, fakeRepo.capturedLat!!, 0.001)
+        assertEquals(36.8219, fakeRepo.capturedLng!!, 0.001)
     }
 }
