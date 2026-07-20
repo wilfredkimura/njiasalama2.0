@@ -32,11 +32,17 @@ export class RoutesController {
   }
 
   @Get('geocode')
-  async searchLocations(@Query('query') query: string): Promise<GeocodeLocation[]> {
+  async searchLocations(
+    @Query('query') query: string,
+    @Query('focusLat') focusLat?: string,
+    @Query('focusLng') focusLng?: string,
+  ): Promise<GeocodeLocation[]> {
     if (!query || query.trim().length === 0) {
       throw new BadRequestException('Search query string is required.');
     }
-    return await this.routesService.searchLocations(query);
+    const lat = focusLat ? parseFloat(focusLat) : undefined;
+    const lng = focusLng ? parseFloat(focusLng) : undefined;
+    return await this.routesService.searchLocations(query, lat, lng);
   }
 
   @UseGuards(AuthGuard)
