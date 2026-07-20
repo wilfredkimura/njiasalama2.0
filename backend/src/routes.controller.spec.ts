@@ -60,7 +60,7 @@ describe('RoutesController', () => {
       mockRoutesService.searchLocations = jest.fn().mockResolvedValue(mockLocations);
 
       const result = await controller.searchLocations('Nairobi');
-      expect(mockRoutesService.searchLocations).toHaveBeenCalledWith('Nairobi');
+      expect(mockRoutesService.searchLocations).toHaveBeenCalledWith('Nairobi', undefined, undefined);
       expect(result).toEqual(mockLocations);
     });
   });
