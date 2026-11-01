@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NjiaSalama - Smart & Safe Navigation</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="description" content="NjiaSalama updates, release notes, and APK downloads.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+  <!-- Theme: Vue style -->
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+  <style>
+    :root {
+      --theme-color: #059669;
+    }
+    .app-name-link img {
+      width: 32px;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .release-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin: 1.5rem 0;
+      background: #fafafa;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    .release-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .release-tag {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .release-badge {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      background: #e0f2fe;
+      color: #0369a1;
+      font-weight: 600;
+    }
+    .release-badge.latest {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .release-date {
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+    .release-assets {
+      margin-top: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #059669;
+      color: #ffffff !important;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      text-decoration: none !important;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+    .btn-download:hover {
+      background: #047857;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #f1f5f9;
+      color: #334155 !important;
+      padding: 0.5rem 0.9rem;
+      border-radius: 6px;
+      text-decoration: none !important;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border: 1px solid #cbd5e1;
+    }
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+    .loading-spinner {
+      color: #64748b;
+      font-style: italic;
+      padding: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">Loading NjiaSalama Updates...</div>
+  <script>
+    window.$docsify = {
+      name: 'NjiaSalama',
+      repo: 'wilfredkimura/njiasalama2.0',
+      loadSidebar: true,
+      loadNavbar: true,
+      subMaxLevel: 3,
+      coverpage: true,
+      auto2top: true,
+      search: {
+        maxAge: 86400000,
+        paths: 'auto',
+        placeholder: 'Search updates & docs',
+        noData: 'No Results found!',
+        depth: 6
+      },
+      plugins: [
+        function(hook, vm) {
+          hook.doneEach(function() {
+            const container = document.getElementById('github-releases-container');
+            if (container) {
+              fetchReleases(container);
+            }
+          });
+        }
+      ]
+    };
+
+    function fetchReleases(container) {
+      const repo = 'wilfredkimura/njiasalama2.0';
+      container.innerHTML = '<div class="loading-spinner">Fetching live releases from GitHub...</div>';
+
+      fetch(`https://api.github.com/repos/${repo}/releases`)
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`GitHub API returned status ${res.status}`);
+          }
+          return res.json();
+        })
+        .then(releases => {
+          if (!releases || releases.length === 0) {
+            container.innerHTML = `
+              <div class="release-card">
+                <p>No published GitHub releases found yet.</p>
+                <p>You can check the repository directly or trigger a release on GitHub.</p>
+                <a class="btn-download" href="https://github.com/${repo}/releases" target="_blank" rel="noopener">View GitHub Releases</a>
+              </div>
+            `;
+            return;
+          }
+
+          let html = '';
+          releases.forEach((rel, index) => {
+            const isLatest = index === 0;
+            const publishedDate = new Date(rel.published_at).toLocaleDateString(undefined, {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            });
+
+            // Find apk assets
+            const apkAssets = rel.assets.filter(a => a.name.endsWith('.apk'));
+            const otherAssets = rel.assets.filter(a => !a.name.endsWith('.apk'));
+
+            let assetButtons = '';
+            if (apkAssets.length > 0) {
+              apkAssets.forEach(apk => {
+                const sizeMb = (apk.size / (1024 * 1024)).toFixed(1);
+                assetButtons += `
+                  <a class="btn-download" href="${apk.browser_download_url}" target="_blank" rel="noopener">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zm7-18L5.33 9h4.07v6h5.2v-6h4.07L12 2z"/></svg>
+                    Download ${apk.name} (${sizeMb} MB)
+                  </a>
+                `;
+              });
+            } else {
+              assetButtons += `
+                <a class="btn-download" href="${rel.html_url}" target="_blank" rel="noopener">
+                  View Release & Assets
+                </a>
+              `;
+            }
+
+            // Fallback zip / tarballs or extra items
+            assetButtons += `
+              <a class="btn-secondary" href="${rel.zipball_url}" target="_blank" rel="noopener">Source Code (.zip)</a>
+              <a class="btn-secondary" href="${rel.html_url}" target="_blank" rel="noopener">View on GitHub</a>
+            `;
+
+            const bodyContent = rel.body 
+              ? marked.parse(rel.body) 
+              : '<em>No release notes provided for this build.</em>';
+
+            html += `
+              <div class="release-card">
+                <div class="release-header">
+                  <div>
+                    <span class="release-tag">${rel.name || rel.tag_name}</span>
+                    <span class="release-badge ${isLatest ? 'latest' : ''}">${isLatest ? 'Latest Release' : (rel.prerelease ? 'Pre-release' : 'Release')}</span>
+                  </div>
+                  <span class="release-date">Published on ${publishedDate}</span>
+                </div>
+                <div class="release-body">${bodyContent}</div>
+                <div class="release-assets">${assetButtons}</div>
+              </div>
+            `;
+          });
+
+          container.innerHTML = html;
+        })
+        .catch(err => {
+          console.error(err);
+          container.innerHTML = `
+            <div class="release-card" style="border-left: 4px solid #ef4444;">
+              <p><strong>Unable to load releases right now:</strong> ${err.message}</p>
+              <p>You can still download and view all releases directly on GitHub:</p>
+              <a class="btn-download" href="https://github.com/${repo}/releases" target="_blank" rel="noopener">Open GitHub Releases</a>
+            </div>
+          `;
+        });
+    }
+  </script>
+  <!-- Docsify v4 -->
+  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+  <!-- Search plugin -->
+  <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
+  <!-- Copy to clipboard -->
+  <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+  <!-- Markdown parser helper for dynamic release body -->
+  <script src="//cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</body>
+</html>
+
