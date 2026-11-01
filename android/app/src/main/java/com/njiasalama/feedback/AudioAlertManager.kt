@@ -6,6 +6,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
 import android.speech.tts.TextToSpeech
+import com.njiasalama.domain.model.HazardType
 import com.njiasalama.domain.proximity.ProximityAlert
 import com.njiasalama.domain.proximity.ProximityAlertLevel
 import java.util.Locale
@@ -47,10 +48,10 @@ class AudioAlertManager(private val context: Context) : TextToSpeech.OnInitListe
         if (!isTtsReady || tts == null) return
 
         val hazardName = when (alert.pin.type) {
-            "POTHOLE" -> "Pothole"
-            "UNLIT_STREET" -> "Unlit street"
-            "DANGEROUS_TRAFFIC" -> "Heavy traffic hazard"
-            else -> "Road obstacle"
+            HazardType.POTHOLE -> "Pothole"
+            HazardType.UNLIT_STREET -> "Unlit street"
+            HazardType.DANGEROUS_TRAFFIC -> "Heavy traffic hazard"
+            HazardType.OTHER -> "Road obstacle"
         }
 
         val distanceRounded = (alert.distanceMeters / 10).toInt() * 10
@@ -90,4 +91,3 @@ class AudioAlertManager(private val context: Context) : TextToSpeech.OnInitListe
         tts = null
     }
 }
-

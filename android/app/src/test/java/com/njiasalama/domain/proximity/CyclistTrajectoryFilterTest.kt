@@ -2,6 +2,7 @@ package com.njiasalama.domain.proximity
 
 import com.google.android.gms.maps.model.LatLng
 import com.njiasalama.domain.model.DangerPin
+import com.njiasalama.domain.model.HazardType
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -11,11 +12,11 @@ class CyclistTrajectoryFilterTest {
         id = "pin-1",
         title = "Severe Pothole",
         description = "Deep crater in bike lane",
-        type = "POTHOLE",
+        type = HazardType.POTHOLE,
         latitude = 0.0005, // ~55m North
         longitude = 0.0,
         reportedBy = "Tester",
-        createdAt = "2026-11-01"
+        imageUrl = null
     )
 
     @Test
@@ -87,4 +88,3 @@ class CyclistTrajectoryFilterTest {
         assertNull(alert) // Suppressed when stationary
     }
 }
-

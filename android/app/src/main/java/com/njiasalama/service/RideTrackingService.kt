@@ -52,7 +52,8 @@ class RideTrackingService : Service() {
         serviceScope.launch {
             try {
                 val repo = RetrofitClient.getPinRepository(applicationContext)
-                activePins = repo.getPins()
+                val result = repo.getPins()
+                activePins = result.getOrDefault(emptyList())
             } catch (e: Exception) {
                 e.printStackTrace()
             }
