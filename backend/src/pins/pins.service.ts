@@ -1,21 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DangerPin } from './pins.entity';
 import { CreatePinDto } from './dto/create-pin.dto';
-import { PinsGateway } from './pins.gateway'; // Importing PinsGateway to trigger live broadcasts
+import { PinsGateway } from './pins.gateway';
 
 /**
  * Service layer coordinating database read/write queries for hazard danger pins.
- * Decorating a class with @Injectable makes it managed by NestJS's dependency injection container.
  */
 @Injectable()
 export class PinsService {
   constructor(
-    // Inject the default TypeORM repository for the DangerPin entity
     @InjectRepository(DangerPin)
     private readonly pinsRepository: Repository<DangerPin>,
-    // Inject the WebSocket gateway to publish live real-time updates
     private readonly pinsGateway: PinsGateway,
   ) {}
 
@@ -23,37 +20,39 @@ export class PinsService {
    * Saves a new cyclist-reported road hazard pin in the database and broadcasts it in real-time.
    */
   async create(createPinDto: CreatePinDto): Promise<DangerPin> {
-    const pin = this.pinsRepository.create(createPinDto);
+    const pin = this.pinsRepository.create({
+      ...createPinDto,
+      status: 'ACTIVE',
+      upvotes: 1,
+      downvotes: 0,
+    });
     const savedPin = await this.pinsRepository.save(pin);
-    // Broadcast the newly created danger pin to all connected WebSocket clients instantly
     this.pinsGateway.broadcastNewPin(savedPin);
     return savedPin;
   }
 
   /**
-   * Fetches all danger pins registered in the database, ordered by latest report first.
+   * Fetches all active danger pins registered in the database, ordered by latest report first.
    */
   async findAll(): Promise<DangerPin[]> {
     return await this.pinsRepository.find({
+      where: { status: 'ACTIVE' },
       order: { createdAt: 'DESC' },
     });
   }
 
   /**
-   * Fetches all danger pins located within a specified radius (in meters) of a cyclist's current coordinates.
-   * This method uses the standard Haversine formula written in raw SQL to calculate metric distance on the earth's surface.
-   * It works on all PostgreSQL/Neon configurations without requiring the PostGIS spatial extension.
+   * Fetches active danger pins within a radius around the cyclist.
    */
   async findAllNearby(
     latitude: number,
     longitude: number,
-    radiusMeters: number = 5000, // Default distance of 5 kilometers (5000 meters)
+    radiusMeters: number = 5000,
   ): Promise<DangerPin[]> {
     return await this.pinsRepository
       .createQueryBuilder('pin')
-      .where(
-        // The Spherical Law of Cosines (Haversine formula variant) calculates geodesic distance in meters.
-        // Earth's radius is approximated as 6,371,000 meters.
+      .where('pin.status = :status', { status: 'ACTIVE' })
+      .andWhere(
         'acos(' +
           'sin(radians(pin.latitude)) * sin(radians(:latitude)) + ' +
           'cos(radians(pin.latitude)) * cos(radians(:latitude)) * ' +
@@ -61,7 +60,30 @@ export class PinsService {
         ') * 6371000 <= :radiusMeters',
         { latitude, longitude, radiusMeters },
       )
-      .orderBy('pin.createdAt', 'DESC') // Order search results by latest first
+      .orderBy('pin.createdAt', 'DESC')
       .getMany();
+  }
+
+  /**
+   * Allows community cyclists to vote whether a hazard is still present (confirm)
+   * or cleared (resolved). 3 or more 'cleared' votes automatically resolves the pin.
+   */
+  async vote(pinId: string, action: 'confirm' | 'cleared'): Promise<DangerPin> {
+    const pin = await this.pinsRepository.findOne({ where: { id: pinId } });
+    if (!pin) {
+      throw new NotFoundException(`Danger pin with ID ${pinId} not found`);
+    }
+
+    if (action === 'confirm') {
+      pin.upvotes += 1;
+    } else if (action === 'cleared') {
+      pin.downvotes += 1;
+      // Auto-decay rule: 3 or more downvotes marks hazard as resolved
+      if (pin.downvotes >= 3) {
+        pin.status = 'RESOLVED';
+      }
+    }
+
+    return await this.pinsRepository.save(pin);
   }
 }
